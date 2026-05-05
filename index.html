@@ -6,33 +6,28 @@
   <title>سعة — AR Space Organizer</title>
 
   <!--
-    MindAR: a free library that lets us do markerless AR in the browser.
-    It works on both iPhone and Android without needing a printed marker.
-    We pair it with A-Frame which handles the 3D objects.
+    We use A-Frame + AR.js with the Hiro marker.
+    This is the most reliable approach that works on ALL phones
+    including iPhone and Android without any extra setup.
+    The user points at the Hiro marker and sees 3D boxes appear on it.
+    This is exactly like Lab 1 but way more advanced in terms of features.
   -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-world-aframe.prod.js"></script>
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
 
-  <!-- Google font for nice looking text -->
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet" />
 
   <style>
-    /* reset everything so there are no weird margins */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* CSS variables — easy to change colors in one place */
     :root {
       --blue:   #4A9EFF;
       --orange: #FF8C42;
       --green:  #4ade80;
       --red:    #f87171;
       --yellow: #facc15;
-      --bg:     rgba(8, 12, 24, 0.88);
-      --border: rgba(74, 158, 255, 0.2);
+      --bg:     rgba(8,12,24,0.9);
+      --border: rgba(74,158,255,0.2);
       --text:   #E8F0FF;
       --muted:  #4A6080;
     }
@@ -41,12 +36,12 @@
       font-family: 'DM Sans', sans-serif;
       background: #000;
       color: var(--text);
-      overflow: hidden; /* no scrolling, everything fits on screen */
+      overflow: hidden;
       height: 100vh;
       width: 100vw;
     }
 
-    /* ── the AR scene sits behind everything ── */
+    /* fix the AR scene to fill the whole screen */
     a-scene {
       position: fixed !important;
       top: 0; left: 0;
@@ -55,13 +50,31 @@
       z-index: 0;
     }
 
-    /* ── UI overlay sits on top of the AR scene ── */
+    /* fix the video camera feed to fill screen */
+    video {
+      position: fixed !important;
+      top: 0 !important; left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      object-fit: cover !important;
+      z-index: 0 !important;
+    }
+
+    canvas {
+      position: fixed !important;
+      top: 0 !important; left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 1 !important;
+    }
+
+    /* UI sits on top of everything */
     #ui {
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
       z-index: 10;
-      pointer-events: none; /* clicks pass through unless we say otherwise */
+      pointer-events: none;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -79,16 +92,14 @@
       border-bottom: 1px solid var(--border);
     }
 
-    /* app logo */
     .logo {
       font-family: 'Space Mono', monospace;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
       color: var(--blue);
     }
     .logo em { color: var(--orange); font-style: normal; }
 
-    /* capacity pill in the middle of the top bar */
     #capBadge {
       font-family: 'Space Mono', monospace;
       font-size: 11px;
@@ -97,74 +108,77 @@
       background: rgba(74,158,255,0.1);
       border: 1px solid var(--border);
       color: var(--blue);
-      transition: background 0.4s;
     }
 
-    /* small hint text on the right */
     .topbar-hint {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--muted);
       font-family: 'Space Mono', monospace;
       text-align: right;
-      max-width: 80px;
       line-height: 1.4;
     }
 
-    /* ── scanning hint in the middle of screen ── */
-    #scanHint {
+    /* ── middle hint ── */
+    #midHint {
       pointer-events: none;
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
-      transition: opacity 0.5s;
     }
 
-    #scanHint .scan-ring {
-      width: 120px; height: 120px;
-      border: 2px solid var(--blue);
+    .hint-ring {
+      width: 100px; height: 100px;
+      border: 2px solid rgba(74,158,255,0.6);
       border-radius: 50%;
-      margin: 0 auto 16px;
+      margin: 0 auto 14px;
       animation: pulse 2s ease-in-out infinite;
-      position: relative;
-    }
-
-    /* corner brackets on the scan ring */
-    #scanHint .scan-ring::before,
-    #scanHint .scan-ring::after {
-      content: '';
-      position: absolute;
-      width: 20px; height: 20px;
-      border-color: var(--orange);
-      border-style: solid;
-    }
-    #scanHint .scan-ring::before {
-      top: -2px; left: -2px;
-      border-width: 3px 0 0 3px;
-      border-radius: 4px 0 0 0;
-    }
-    #scanHint .scan-ring::after {
-      bottom: -2px; right: -2px;
-      border-width: 0 3px 3px 0;
-      border-radius: 0 0 4px 0;
     }
 
     @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50%       { transform: scale(1.08); opacity: 0.6; }
+      0%,100% { transform: scale(1); opacity: 0.8; }
+      50%      { transform: scale(1.1); opacity: 0.4; }
     }
 
-    #scanHint p {
-      font-family: 'Space Mono', monospace;
-      font-size: 12px;
-      color: var(--text);
+    .hint-pill {
       background: var(--bg);
       backdrop-filter: blur(8px);
-      padding: 8px 16px;
-      border-radius: 100px;
       border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 8px 16px;
+      font-size: 12px;
+      font-family: 'Space Mono', monospace;
+      color: var(--text);
+      white-space: nowrap;
     }
+
+    /* ── fit panel top right ── */
+    #fitPanel {
+      pointer-events: none;
+      position: fixed;
+      top: 76px; right: 12px;
+      background: var(--bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      min-width: 145px;
+    }
+
+    #fitPanel h4 {
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .ok   { color: var(--green); }
+    .warn { color: var(--yellow); }
+    .bad  { color: var(--red); }
 
     /* ── bottom panel ── */
     #bottomPanel {
@@ -172,10 +186,8 @@
       background: var(--bg);
       backdrop-filter: blur(20px);
       border-top: 1px solid var(--border);
-      padding: 0;
     }
 
-    /* tab buttons at the top of the panel */
     .tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -190,7 +202,7 @@
       font-family: 'DM Sans', sans-serif;
       font-size: 13px;
       font-weight: 500;
-      padding: 12px 8px;
+      padding: 11px 6px;
       cursor: pointer;
       transition: all 0.2s;
       text-align: center;
@@ -201,14 +213,10 @@
       border-bottom-color: var(--blue);
     }
 
-    /* tab content areas */
-    .tab-pane {
-      display: none;
-      padding: 14px 16px;
-    }
+    .tab-pane { display: none; padding: 14px 16px; }
     .tab-pane.active { display: block; }
 
-    /* ── form inputs ── */
+    /* form */
     .form-grid {
       display: grid;
       grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -244,10 +252,10 @@
     /* color swatches */
     .swatches {
       display: flex;
+      align-items: center;
       gap: 8px;
       margin-bottom: 12px;
       flex-wrap: wrap;
-      align-items: center;
     }
 
     .swatches label {
@@ -256,7 +264,6 @@
       font-family: 'Space Mono', monospace;
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin-right: 4px;
     }
 
     .swatch {
@@ -265,16 +272,16 @@
       cursor: pointer;
       border: 2px solid transparent;
       transition: transform 0.15s, border-color 0.15s;
-      flex-shrink: 0;
+      display: inline-block;
     }
     .swatch:hover { transform: scale(1.2); }
-    .swatch.sel   { border-color: white; transform: scale(1.2); }
+    .swatch.sel { border-color: white; transform: scale(1.2); }
 
     /* buttons */
     .btn {
       border: none;
       border-radius: 10px;
-      padding: 11px 16px;
+      padding: 11px 14px;
       font-family: 'DM Sans', sans-serif;
       font-size: 14px;
       font-weight: 600;
@@ -283,24 +290,15 @@
     }
     .btn:active { transform: scale(0.97); }
     .btn:hover  { opacity: 0.88; }
+    .btn-full   { width: 100%; }
+    .btn-blue   { background: var(--blue);   color: white; }
+    .btn-orange { background: var(--orange); color: white; }
+    .btn-ghost  { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-danger { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
 
-    .btn-full  { width: 100%; }
-    .btn-blue  { background: var(--blue);   color: white; }
-    .btn-orange{ background: var(--orange); color: white; }
-    .btn-ghost {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-    }
-    .btn-danger{
-      background: rgba(248,113,113,0.15);
-      border: 1px solid rgba(248,113,113,0.4);
-      color: var(--red);
-    }
-
-    /* ── object list ── */
+    /* object list */
     #objList {
-      max-height: 130px;
+      max-height: 120px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -315,80 +313,36 @@
       background: rgba(74,158,255,0.04);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 9px 12px;
+      padding: 8px 12px;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      transition: all 0.2s;
     }
     .obj-card:hover  { border-color: rgba(74,158,255,0.4); }
     .obj-card.active { border-color: var(--blue); background: rgba(74,158,255,0.08); }
 
-    .obj-dot {
-      width: 12px; height: 12px;
-      border-radius: 3px;
-      flex-shrink: 0;
-    }
-
+    .obj-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
     .obj-info { flex: 1; min-width: 0; }
     .obj-name { font-size: 13px; font-weight: 500; }
-    .obj-dim  {
-      font-size: 10px;
-      color: var(--muted);
-      font-family: 'Space Mono', monospace;
-    }
+    .obj-dim  { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
 
-    .obj-remove {
+    .obj-del {
       background: none; border: none;
-      color: var(--muted); cursor: pointer;
-      font-size: 16px; padding: 2px 6px;
-      border-radius: 4px;
-      transition: color 0.2s, background 0.2s;
+      color: var(--muted); cursor: pointer; font-size: 16px;
+      padding: 2px 6px; border-radius: 4px;
+      transition: color 0.2s;
     }
-    .obj-remove:hover { color: var(--red); background: rgba(248,113,113,0.1); }
+    .obj-del:hover { color: var(--red); }
 
-    /* row of action buttons */
-    .btn-row {
-      display: flex;
-      gap: 8px;
-    }
+    .btn-row { display: flex; gap: 8px; }
 
-    /* ── fit analysis panel (top right) ── */
-    #fitPanel {
-      pointer-events: none;
-      position: fixed;
-      top: 80px; right: 12px;
-      background: var(--bg);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 12px 14px;
-      font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      min-width: 150px;
-      line-height: 1.7;
-    }
-
-    #fitPanel h4 {
-      font-size: 9px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-    .ok   { color: var(--green); }
-    .warn { color: var(--yellow); }
-    .bad  { color: var(--red); }
-
-    /* ── empty state ── */
     .empty {
       text-align: center;
       color: var(--muted);
       font-size: 12px;
-      padding: 14px 0;
+      padding: 12px 0;
       font-family: 'Space Mono', monospace;
     }
 
-    /* scrollbar */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   </style>
@@ -397,44 +351,65 @@
 
 <!--
   ════════════════════════════════════════
-  A-FRAME + MINDAR SCENE
-  This is the actual AR part.
-  MindAR scans the surface with the camera,
-  then we place 3D objects on it.
+  AR SCENE using A-Frame + AR.js
+  The user points at a Hiro marker.
+  All the 3D boxes appear on top of the marker.
+  This works on ALL phones - iPhone and Android.
   ════════════════════════════════════════
 -->
 <a-scene
-  mindar-world="autoStart: true;"
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false;"
   vr-mode-ui="enabled: false"
-  renderer="colorManagement: true; physicallyCorrectLights: true;"
-  device-orientation-permission-ui="enabled: false"
+  renderer="logarithmicDepthBuffer: true; antialias: true;"
 >
-  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-  <!--
-    This entity is where our 3D content lives.
-    MindAR attaches it to a detected flat surface automatically.
-  -->
-  <a-entity id="arRoot" mindar-world-target="targetIndex: 0">
+  <!-- Hiro marker - everything inside appears on top of it -->
+  <a-marker
+    id="marker"
+    preset="hiro"
+    smooth="true"
+    smoothCount="10"
+    smoothTolerance="0.01"
+    smoothThreshold="5"
+  >
 
-    <!-- flat grid plane that shows the "floor" of the space -->
+    <!-- the floor grid of the space -->
     <a-plane
-      id="gridFloor"
       rotation="-90 0 0"
       width="3" height="3"
-      color="#0A0E1A"
-      opacity="0.5"
+      color="#080C18"
+      opacity="0.7"
       material="transparent: true; side: double"
     ></a-plane>
 
-    <!-- grid lines going across the floor -->
-    <!-- these make it look like a measurement grid -->
-    <a-entity id="gridLines"></a-entity>
+    <!-- grid lines - horizontal -->
+    <a-box position="0 0.002 -1"   width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position="0 0.002 -0.5" width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position="0 0.002  0"   width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position="0 0.002  0.5" width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position="0 0.002  1"   width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
 
-    <!-- all user boxes go inside this container -->
+    <!-- grid lines - vertical -->
+    <a-box position="-1   0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position="-0.5 0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position=" 0   0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position=" 0.5 0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+    <a-box position=" 1   0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
+
+    <!-- space boundary walls (transparent blue walls to show the space) -->
+    <a-box position="0 0.5  1.5" width="3" height="1" depth="0.02" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
+    <a-box position="0 0.5 -1.5" width="3" height="1" depth="0.02" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
+    <a-box position=" 1.5 0.5 0" width="0.02" height="1" depth="3" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
+    <a-box position="-1.5 0.5 0" width="0.02" height="1" depth="3" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
+
+    <!-- this is where all the user's boxes go -->
     <a-entity id="boxContainer"></a-entity>
 
-  </a-entity>
+  </a-marker>
+
+  <!-- camera needed for AR.js -->
+  <a-entity camera></a-entity>
 
 </a-scene>
 
@@ -442,8 +417,6 @@
 <!--
   ════════════════════════════════════════
   UI OVERLAY
-  All the buttons, inputs, and labels
-  sit on top of the AR scene as HTML.
   ════════════════════════════════════════
 -->
 <div id="ui">
@@ -452,32 +425,31 @@
   <div class="topbar">
     <div class="logo">سعة <em>·</em> Sa'ah</div>
     <div id="capBadge">0 objects</div>
-    <div class="topbar-hint">Move camera<br/>to scan floor</div>
+    <div class="topbar-hint">Point at<br/>Hiro marker</div>
   </div>
 
-  <!-- scanning animation shown before surface is detected -->
-  <div id="scanHint">
-    <div class="scan-ring"></div>
-    <p>Move camera slowly to detect surface</p>
+  <!-- scanning hint shown in the middle of the screen -->
+  <div id="midHint">
+    <div class="hint-ring"></div>
+    <div class="hint-pill" id="hintText">Point camera at Hiro marker 🎯</div>
   </div>
 
-  <!-- fit analysis top right -->
+  <!-- fit analysis -->
   <div id="fitPanel">
     <h4>Fit Analysis</h4>
     <div id="fitStatus" class="ok">Add objects to start</div>
   </div>
 
-  <!-- bottom panel with all controls -->
+  <!-- bottom panel -->
   <div id="bottomPanel">
 
-    <!-- tab buttons -->
     <div class="tabs">
-      <button class="tab active" onclick="showTab('add', this)">➕ Add Object</button>
-      <button class="tab"        onclick="showTab('list', this)">📦 Objects</button>
-      <button class="tab"        onclick="showTab('space', this)">📐 Space</button>
+      <button class="tab active" onclick="showTab('add',this)">➕ Add Object</button>
+      <button class="tab"        onclick="showTab('list',this)">📦 Objects</button>
+      <button class="tab"        onclick="showTab('space',this)">📐 Space</button>
     </div>
 
-    <!-- ADD TAB: user enters object details here -->
+    <!-- ADD TAB -->
     <div class="tab-pane active" id="tab-add">
       <div class="form-grid">
         <div class="field">
@@ -486,45 +458,41 @@
         </div>
         <div class="field">
           <label>W cm</label>
-          <input type="number" id="objW" placeholder="50" min="5" max="300" />
+          <input type="number" id="objW" placeholder="50" min="5" />
         </div>
         <div class="field">
           <label>D cm</label>
-          <input type="number" id="objD" placeholder="40" min="5" max="300" />
+          <input type="number" id="objD" placeholder="40" min="5" />
         </div>
         <div class="field">
           <label>H cm</label>
-          <input type="number" id="objH" placeholder="30" min="5" max="300" />
+          <input type="number" id="objH" placeholder="30" min="5" />
         </div>
       </div>
-      <!-- color picker -->
       <div class="swatches">
         <label>Color</label>
         <div id="swatchRow"></div>
       </div>
-      <button class="btn btn-blue btn-full" onclick="addObject()">
-        Place in AR Scene
-      </button>
+      <button class="btn btn-blue btn-full" onclick="addObject()">Place in AR Scene</button>
     </div>
 
-    <!-- LIST TAB: shows all placed objects -->
+    <!-- LIST TAB -->
     <div class="tab-pane" id="tab-list">
       <div id="objList">
-        <div class="empty">No objects yet — add one first!</div>
+        <div class="empty">No objects yet!</div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="rotateSelected()">↻ Rotate</button>
+        <button class="btn btn-ghost"  style="flex:1;font-size:12px" onclick="rotateSelected()">↻ Rotate</button>
         <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="removeSelected()">✕ Remove</button>
-        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="clearAll()">🗑 Clear All</button>
+        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="clearAll()">🗑 All</button>
       </div>
     </div>
 
-    <!-- SPACE TAB: lets user set the space dimensions -->
+    <!-- SPACE TAB -->
     <div class="tab-pane" id="tab-space">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;font-family:'Space Mono',monospace">
-        Set the real dimensions of the space you are trying to fill:
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;font-family:'Space Mono',monospace">
+        Set the real size of the space you want to fill:
       </p>
-      <!-- preset buttons -->
       <div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
         <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(120,100,80)">🚗 Car Boot</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(35,20,45)">🎒 Backpack</button>
@@ -533,19 +501,19 @@
       </div>
       <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
         <div class="field">
-          <label>Width cm</label>
+          <label>W cm</label>
           <input type="number" id="spaceW" value="120" />
         </div>
         <div class="field">
-          <label>Depth cm</label>
+          <label>D cm</label>
           <input type="number" id="spaceD" value="100" />
         </div>
         <div class="field">
-          <label>Height cm</label>
+          <label>H cm</label>
           <input type="number" id="spaceH" value="80" />
         </div>
       </div>
-      <button class="btn btn-orange btn-full" onclick="updateSpaceSize()">Apply Space Size</button>
+      <button class="btn btn-orange btn-full" onclick="applySpace()">Apply Space</button>
     </div>
 
   </div>
@@ -554,43 +522,29 @@
 
 <script>
 // ════════════════════════════════════════
-// APP STATE — all the data the app needs
+// APP STATE
 // ════════════════════════════════════════
-
 const app = {
-  objects: [],         // list of all objects the user has added
-  selectedId: null,    // which object is currently highlighted
-  nextId: 1,           // auto incrementing id for each object
-  color: '#4A9EFF',    // currently selected color
+  objects:     [],           // all objects added by user
+  selectedId:  null,         // currently selected object id
+  nextId:      1,            // auto increment id
+  color:       '#4A9EFF',    // currently picked color
+  space:       { w:120, d:100, h:80 }, // space dimensions in cm
 
-  // space dimensions in cm (default: car boot)
-  space: { w: 120, d: 100, h: 80 },
+  // available colors
+  colors: ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
 
-  // colors the user can pick from
-  colors: [
-    '#4A9EFF', // blue
-    '#FF8C42', // orange
-    '#4ade80', // green
-    '#f472b6', // pink
-    '#facc15', // yellow
-    '#a78bfa', // purple
-    '#f87171', // red
-    '#34d399', // teal
+  // grid positions where boxes get placed (x, z in A-Frame units)
+  // we have a 3x3 unit grid so positions go from -1 to 1
+  slots: [
+    [-0.8, 0.8], [0, 0.8], [0.8, 0.8],
+    [-0.8, 0  ], [0, 0  ], [0.8, 0  ],
+    [-0.8,-0.8], [0,-0.8], [0.8,-0.8],
   ],
-
-  // layout positions on the AR grid for placing boxes
-  // each is [x, z] in A-Frame units (we scale cm to units)
-  positions: [
-    [-0.5,  0.5], [0,  0.5], [0.5,  0.5],
-    [-0.5,  0  ], [0,  0  ], [0.5,  0  ],
-    [-0.5, -0.5], [0, -0.5], [0.5, -0.5],
-  ],
-
-  surfaceFound: false,  // has MindAR detected a surface yet?
 };
 
-// how many cm = 1 A-Frame unit
-// we use 1 unit = 100cm so a 50cm box = 0.5 units
+// 1 cm = this many A-Frame units
+// we use 1 unit = 100cm so 50cm = 0.5 units
 const CM = 0.01;
 
 // ════════════════════════════════════════
@@ -599,19 +553,16 @@ const CM = 0.01;
 function buildSwatches() {
   const row = document.getElementById('swatchRow');
   app.colors.forEach(c => {
-    const dot = document.createElement('div');
-    dot.className = 'swatch' + (c === app.color ? ' sel' : '');
-    dot.style.background = c;
-    dot.style.display = 'inline-block';
-
-    // when user clicks a color, make it selected
-    dot.onclick = () => {
-      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('sel'));
-      dot.classList.add('sel');
+    const s = document.createElement('div');
+    s.className = 'swatch' + (c === app.color ? ' sel' : '');
+    s.style.background = c;
+    s.onclick = () => {
+      // deselect all then select this one
+      document.querySelectorAll('.swatch').forEach(x => x.classList.remove('sel'));
+      s.classList.add('sel');
       app.color = c;
     };
-
-    row.appendChild(dot);
+    row.appendChild(s);
   });
 }
 buildSwatches();
@@ -620,11 +571,8 @@ buildSwatches();
 // TABS
 // ════════════════════════════════════════
 function showTab(name, btn) {
-  // hide all tab panes
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-
-  // show the one we want
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
 }
@@ -633,60 +581,18 @@ function showTab(name, btn) {
 // SPACE PRESETS
 // ════════════════════════════════════════
 function setPreset(w, d, h) {
-  // fill in the space dimension inputs
   document.getElementById('spaceW').value = w;
   document.getElementById('spaceD').value = d;
   document.getElementById('spaceH').value = h;
-  updateSpaceSize();
+  applySpace();
 }
 
-function updateSpaceSize() {
+function applySpace() {
   app.space.w = +document.getElementById('spaceW').value || 120;
   app.space.d = +document.getElementById('spaceD').value || 100;
   app.space.h = +document.getElementById('spaceH').value || 80;
-  updateFitPanel();
+  updateFit();
 }
-
-// ════════════════════════════════════════
-// BUILD AR GRID LINES
-// Makes the floor look like a measurement grid
-// ════════════════════════════════════════
-function buildGrid() {
-  const container = document.getElementById('gridLines');
-  container.innerHTML = '';
-
-  // draw 5 lines in each direction
-  const lines = 5;
-  const size  = 1.5; // half the grid size in A-Frame units
-  const step  = (size * 2) / lines;
-
-  for (let i = 0; i <= lines; i++) {
-    const pos = -size + i * step;
-
-    // horizontal line (goes left to right)
-    const h = document.createElement('a-box');
-    h.setAttribute('position', `0 0.001 ${pos}`);
-    h.setAttribute('width',  size * 2);
-    h.setAttribute('height', 0.002);
-    h.setAttribute('depth',  0.008);
-    h.setAttribute('color',  '#4A9EFF');
-    h.setAttribute('opacity', '0.25');
-    h.setAttribute('material', 'transparent: true');
-    container.appendChild(h);
-
-    // vertical line (goes front to back)
-    const v = document.createElement('a-box');
-    v.setAttribute('position', `${pos} 0.001 0`);
-    v.setAttribute('width',  0.008);
-    v.setAttribute('height', 0.002);
-    v.setAttribute('depth',  size * 2);
-    v.setAttribute('color',  '#4A9EFF');
-    v.setAttribute('opacity', '0.25');
-    v.setAttribute('material', 'transparent: true');
-    container.appendChild(v);
-  }
-}
-buildGrid();
 
 // ════════════════════════════════════════
 // ADD OBJECT TO AR SCENE
@@ -697,37 +603,35 @@ function addObject() {
   const d    = parseFloat(document.getElementById('objD').value);
   const h    = parseFloat(document.getElementById('objH').value);
 
-  // make sure all fields are filled
   if (!w || !d || !h) {
-    alert('Please enter Width, Depth, and Height!');
+    alert('Please fill in all dimensions (W, D, H)!');
     return;
   }
 
-  // warn if object is bigger than the space
+  // warn if object is too big for the space
   if (w > app.space.w || d > app.space.d) {
-    alert(`This object (${w}×${d} cm) is bigger than your space (${app.space.w}×${app.space.d} cm)!`);
-    return;
+    if (!confirm(`This object (${w}×${d}cm) might be too big for the space (${app.space.w}×${app.space.d}cm). Add anyway?`)) return;
   }
 
   const id  = app.nextId++;
-  const idx = app.objects.length % app.positions.length; // pick next position slot
-  const pos = app.positions[idx];
+  const idx = app.objects.length % app.slots.length; // pick next slot
+  const pos = app.slots[idx];
 
-  // store the object data
-  const obj = { id, name, w, d, h, color: app.color };
+  const obj = { id, name, w, d, h, color: app.color, rot: 0 };
   app.objects.push(obj);
 
   // convert cm to A-Frame units
-  const aw = w * CM; // A-Frame width
-  const ad = d * CM; // A-Frame depth
-  const ah = h * CM; // A-Frame height
+  const aw = w * CM;
+  const ad = d * CM;
+  const ah = h * CM;
 
-  // create the parent entity (holds box + label)
+  // create the A-Frame entity for this box
   const container = document.getElementById('boxContainer');
+
   const parent = document.createElement('a-entity');
   parent.id = 'obj-' + id;
-  // position it: x and z from our grid, y = half height so it sits on floor
-  parent.setAttribute('position', `${pos[0]} ${ah / 2} ${pos[1]}`);
+  // y = half height so box sits on the floor, not inside it
+  parent.setAttribute('position', `${pos[0]} ${ah/2} ${pos[1]}`);
 
   // the actual 3D box
   const box = document.createElement('a-box');
@@ -735,91 +639,55 @@ function addObject() {
   box.setAttribute('width',  aw);
   box.setAttribute('height', ah);
   box.setAttribute('depth',  ad);
-  box.setAttribute('color',  obj.color);
-  box.setAttribute('material', `color: ${obj.color}; opacity: 0.7; transparent: true`);
+  box.setAttribute('material', `color: ${obj.color}; opacity: 0.72; transparent: true`);
 
-  // wireframe layer on top of the box for AR look
+  // wireframe overlay for that AR look
   const wire = document.createElement('a-box');
-  wire.setAttribute('width',  aw + 0.004);
-  wire.setAttribute('height', ah + 0.004);
-  wire.setAttribute('depth',  ad + 0.004);
-  wire.setAttribute('material', `wireframe: true; color: ${obj.color}; opacity: 1`);
+  wire.id = 'wire-' + id;
+  wire.setAttribute('width',  aw + 0.005);
+  wire.setAttribute('height', ah + 0.005);
+  wire.setAttribute('depth',  ad + 0.005);
+  wire.setAttribute('material', `wireframe: true; color: ${obj.color}`);
 
   // text label floating above the box
-  const text = document.createElement('a-text');
-  text.setAttribute('value', `${name}\n${w}×${d}×${h}cm`);
-  text.setAttribute('align', 'center');
-  text.setAttribute('color', 'white');
-  text.setAttribute('scale', '0.25 0.25 0.25');
-  // position text above the top of the box
-  text.setAttribute('position', `0 ${ah / 2 + 0.1} 0`);
-  text.setAttribute('look-at', '[camera]'); // text always faces camera
+  const label = document.createElement('a-text');
+  label.setAttribute('value', `${name}\n${w}x${d}x${h}cm`);
+  label.setAttribute('align', 'center');
+  label.setAttribute('color', '#ffffff');
+  label.setAttribute('scale', '0.22 0.22 0.22');
+  label.setAttribute('position', `0 ${ah/2 + 0.08} 0`);
+  label.setAttribute('look-at', '[camera]');
 
-  // put it all together
   parent.appendChild(box);
   parent.appendChild(wire);
-  parent.appendChild(text);
+  parent.appendChild(label);
   container.appendChild(parent);
 
-  // clear inputs for next object
+  // clear the input fields
   document.getElementById('objName').value = '';
   document.getElementById('objW').value    = '';
   document.getElementById('objD').value    = '';
   document.getElementById('objH').value    = '';
 
-  // update the list and stats
   renderList();
-  updateFitPanel();
+  updateFit();
+  setHint('✓ ' + name + ' placed in AR!');
+  setTimeout(() => setHint('Point camera at Hiro marker 🎯'), 2500);
 }
 
 // ════════════════════════════════════════
-// RENDER OBJECT LIST
-// ════════════════════════════════════════
-function renderList() {
-  const list = document.getElementById('objList');
-  document.getElementById('capBadge').textContent = app.objects.length + ' object' + (app.objects.length !== 1 ? 's' : '');
-
-  if (app.objects.length === 0) {
-    list.innerHTML = '<div class="empty">No objects yet — add one first!</div>';
-    return;
-  }
-
-  list.innerHTML = '';
-  app.objects.forEach(o => {
-    const card = document.createElement('div');
-    card.className = 'obj-card' + (o.id === app.selectedId ? ' active' : '');
-
-    card.innerHTML = `
-      <div class="obj-dot" style="background:${o.color}"></div>
-      <div class="obj-info">
-        <div class="obj-name">${o.name}</div>
-        <div class="obj-dim">${o.w}×${o.d}×${o.h} cm</div>
-      </div>
-      <button class="obj-remove" onclick="removeById(${o.id}); event.stopPropagation()">×</button>
-    `;
-
-    // clicking a card selects that object
-    card.onclick = () => selectObj(o.id);
-    list.appendChild(card);
-  });
-}
-
-// ════════════════════════════════════════
-// SELECT AN OBJECT (highlights it in AR)
+// SELECT OBJECT (highlights it)
 // ════════════════════════════════════════
 function selectObj(id) {
   app.selectedId = id;
 
-  // make the selected box pulse, reset others
   app.objects.forEach(o => {
     const box = document.getElementById('box-' + o.id);
     if (!box) return;
-
     if (o.id === id) {
-      // pulsing scale animation to show it's selected
-      box.setAttribute('animation', 'property: scale; from: 1 1 1; to: 1.08 1.08 1.08; loop: true; dur: 600; dir: alternate; easing: easeInOutSine');
+      // pulse animation to show selection
+      box.setAttribute('animation', 'property: scale; from: 1 1 1; to: 1.1 1.1 1.1; loop: true; dur: 500; dir: alternate; easing: easeInOutSine');
     } else {
-      // remove the animation from non-selected boxes
       box.removeAttribute('animation');
       box.setAttribute('scale', '1 1 1');
     }
@@ -829,128 +697,129 @@ function selectObj(id) {
 }
 
 // ════════════════════════════════════════
-// ROTATE SELECTED OBJECT
-// Swaps width and depth = 90 degree rotation
+// ROTATE SELECTED (swaps W and D = 90 deg)
 // ════════════════════════════════════════
 function rotateSelected() {
   if (!app.selectedId) { alert('Select an object from the list first!'); return; }
-
   const obj = app.objects.find(o => o.id === app.selectedId);
   if (!obj) return;
 
-  // swap width and depth
+  // swap width and depth to simulate rotation
   [obj.w, obj.d] = [obj.d, obj.w];
 
-  // update the 3D box size
+  // update the 3D box dimensions
   const box  = document.getElementById('box-' + obj.id);
-  const wire = box ? box.nextElementSibling : null;
-  if (box) {
-    box.setAttribute('width', obj.w * CM);
-    box.setAttribute('depth', obj.d * CM);
-  }
-  if (wire) {
-    wire.setAttribute('width', obj.w * CM + 0.004);
-    wire.setAttribute('depth', obj.d * CM + 0.004);
-  }
+  const wire = document.getElementById('wire-' + obj.id);
+  if (box)  { box.setAttribute('width',  obj.w * CM); box.setAttribute('depth',  obj.d * CM); }
+  if (wire) { wire.setAttribute('width', obj.w * CM + 0.005); wire.setAttribute('depth', obj.d * CM + 0.005); }
 
   renderList();
 }
 
 // ════════════════════════════════════════
-// REMOVE OBJECT
+// REMOVE OBJECTS
 // ════════════════════════════════════════
 function removeSelected() {
-  if (!app.selectedId) { alert('Select an object first!'); return; }
+  if (!app.selectedId) { alert('Select an object from the list first!'); return; }
   removeById(app.selectedId);
 }
 
 function removeById(id) {
-  // remove the A-Frame entity from the scene
   const el = document.getElementById('obj-' + id);
   if (el) el.parentNode.removeChild(el);
-
-  // remove from our list
-  app.objects = app.objects.filter(o => o.id !== id);
+  app.objects    = app.objects.filter(o => o.id !== id);
   if (app.selectedId === id) app.selectedId = null;
-
   renderList();
-  updateFitPanel();
+  updateFit();
 }
 
 function clearAll() {
   if (!app.objects.length) return;
   if (!confirm('Remove all objects from the AR scene?')) return;
-
   app.objects.forEach(o => {
     const el = document.getElementById('obj-' + o.id);
     if (el) el.parentNode.removeChild(el);
   });
-
-  app.objects   = [];
+  app.objects    = [];
   app.selectedId = null;
   renderList();
-  updateFitPanel();
+  updateFit();
+}
+
+// ════════════════════════════════════════
+// RENDER OBJECT LIST IN SIDEBAR
+// ════════════════════════════════════════
+function renderList() {
+  const list = document.getElementById('objList');
+  document.getElementById('capBadge').textContent =
+    app.objects.length + ' object' + (app.objects.length !== 1 ? 's' : '');
+
+  if (!app.objects.length) {
+    list.innerHTML = '<div class="empty">No objects yet!</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  app.objects.forEach(o => {
+    const card = document.createElement('div');
+    card.className = 'obj-card' + (o.id === app.selectedId ? ' active' : '');
+    card.innerHTML = `
+      <div class="obj-dot" style="background:${o.color}"></div>
+      <div class="obj-info">
+        <div class="obj-name">${o.name}</div>
+        <div class="obj-dim">${o.w}×${o.d}×${o.h} cm</div>
+      </div>
+      <button class="obj-del" onclick="removeById(${o.id});event.stopPropagation()">×</button>
+    `;
+    card.onclick = () => selectObj(o.id);
+    list.appendChild(card);
+  });
 }
 
 // ════════════════════════════════════════
 // FIT ANALYSIS
-// Tells user if everything will fit
+// Calculates how full the space is
 // ════════════════════════════════════════
-function updateFitPanel() {
-  // total volume of the space in cm³
+function updateFit() {
   const spaceVol = app.space.w * app.space.d * app.space.h;
+  const usedVol  = app.objects.reduce((sum, o) => sum + o.w * o.d * o.h, 0);
+  const pct      = Math.min(100, Math.round((usedVol / spaceVol) * 100));
+  const el       = document.getElementById('fitStatus');
 
-  // total volume of all objects
-  const usedVol = app.objects.reduce((sum, o) => sum + o.w * o.d * o.h, 0);
-
-  // percentage used
-  const pct = Math.min(100, Math.round((usedVol / spaceVol) * 100));
-
-  const el = document.getElementById('fitStatus');
-
-  if (app.objects.length === 0) {
-    el.className = 'ok';
-    el.textContent = 'Add objects to start';
-    return;
+  if (!app.objects.length) {
+    el.className = 'ok'; el.textContent = 'Add objects to start'; return;
   }
 
-  if (pct < 60) {
-    el.className = 'ok';
-    el.textContent = `✓ ${pct}% full\nLooks good!`;
-  } else if (pct < 85) {
-    el.className = 'warn';
-    el.textContent = `⚠ ${pct}% full\nGetting tight`;
-  } else {
-    el.className = 'bad';
-    el.textContent = `✗ ${pct}% full\nWon't fit!`;
-  }
+  if (pct < 60)      { el.className = 'ok';   el.textContent = `✓ ${pct}% full\nLooks good!`; }
+  else if (pct < 85) { el.className = 'warn'; el.textContent = `⚠ ${pct}% full\nGetting tight`; }
+  else               { el.className = 'bad';  el.textContent = `✗ ${pct}% full\nWon't fit!`; }
 }
 
 // ════════════════════════════════════════
-// MINDAR SURFACE DETECTION EVENTS
-// Hide the scan hint once surface is found
+// HINT TEXT IN THE MIDDLE
+// ════════════════════════════════════════
+function setHint(msg) {
+  document.getElementById('hintText').textContent = msg;
+}
+
+// ════════════════════════════════════════
+// MARKER DETECTION EVENTS
+// Hide the hint when marker is found
 // ════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  const scene = document.querySelector('a-scene');
+  const marker = document.getElementById('marker');
+  if (!marker) return;
 
-  scene.addEventListener('arReady', () => {
-    console.log('MindAR is ready!');
+  marker.addEventListener('markerFound', () => {
+    // hide the pulsing hint when marker is detected
+    document.getElementById('midHint').style.opacity = '0';
+    setHint('✓ Marker found! Objects are in AR');
   });
 
-  // when a flat surface is detected, hide the scanning animation
-  const root = document.getElementById('arRoot');
-  if (root) {
-    root.addEventListener('targetFound', () => {
-      app.surfaceFound = true;
-      document.getElementById('scanHint').style.opacity = '0';
-      setTimeout(() => document.getElementById('scanHint').style.display = 'none', 500);
-    });
-
-    root.addEventListener('targetLost', () => {
-      document.getElementById('scanHint').style.display = 'flex';
-      document.getElementById('scanHint').style.opacity = '1';
-    });
-  }
+  marker.addEventListener('markerLost', () => {
+    document.getElementById('midHint').style.opacity = '1';
+    setHint('Point camera at Hiro marker 🎯');
+  });
 });
 </script>
 </body>
