@@ -6,14 +6,12 @@
   <title>سعة — AR Space Organizer</title>
 
   <!--
-    We use A-Frame + AR.js with the Hiro marker.
-    This is the most reliable approach that works on ALL phones
-    including iPhone and Android without any extra setup.
-    The user points at the Hiro marker and sees 3D boxes appear on it.
-    This is exactly like Lab 1 but way more advanced in terms of features.
+    We use A-Frame with WebXR for markerless AR.
+    WebXR uses Google ARCore which is built into Android phones.
+    This means no marker needed — the camera detects the real floor/surface
+    and we place 3D boxes on top of it.
   -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
 
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet" />
 
@@ -26,8 +24,9 @@
       --green:  #4ade80;
       --red:    #f87171;
       --yellow: #facc15;
-      --bg:     rgba(8,12,24,0.9);
-      --border: rgba(74,158,255,0.2);
+      --purple: #a78bfa;
+      --bg:     rgba(8, 12, 24, 0.88);
+      --border: rgba(74, 158, 255, 0.2);
       --text:   #E8F0FF;
       --muted:  #4A6080;
     }
@@ -41,46 +40,136 @@
       width: 100vw;
     }
 
-    /* fix the AR scene to fill the whole screen */
-    a-scene {
-      position: fixed !important;
-      top: 0; left: 0;
-      width: 100% !important;
-      height: 100% !important;
+    /* ── splash screen (shown before AR starts) ── */
+    #splash {
+      position: fixed;
+      inset: 0;
+      background: #080C18;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .splash-logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--blue);
+      line-height: 1;
+    }
+
+    .splash-logo span { color: var(--orange); }
+
+    .splash-sub {
+      font-size: 16px;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 300px;
+    }
+
+    .splash-steps {
+      background: rgba(74,158,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      text-align: left;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .splash-steps h3 {
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.4;
+    }
+
+    .step-num {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(74,158,255,0.2);
+      border: 1px solid var(--blue);
+      color: var(--blue);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ios warning inside splash */
+    #iosWarn {
+      display: none;
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.3);
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: var(--red);
+      line-height: 1.5;
+      max-width: 320px;
+    }
+
+    .btn-start {
+      width: 100%;
+      max-width: 320px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn-start:active { transform: scale(0.97); }
+    .btn-start:hover  { opacity: 0.88; }
+
+    /* ── AR scene fills full screen ── */
+    #arScene {
+      display: none; /* hidden until user taps Start */
+      position: fixed;
+      inset: 0;
       z-index: 0;
     }
 
-    /* fix the video camera feed to fill screen */
-    video {
-      position: fixed !important;
-      top: 0 !important; left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      object-fit: cover !important;
-      z-index: 0 !important;
+    a-scene {
+      width: 100% !important;
+      height: 100% !important;
     }
 
-    canvas {
-      position: fixed !important;
-      top: 0 !important; left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      z-index: 1 !important;
-    }
-
-    /* UI sits on top of everything */
+    /* ── UI overlay on top of AR ── */
     #ui {
+      display: none; /* hidden until AR starts */
       position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
+      inset: 0;
       z-index: 10;
       pointer-events: none;
-      display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
 
-    /* ── top bar ── */
+    /* top bar */
     .topbar {
       pointer-events: all;
       display: flex;
@@ -110,38 +199,42 @@
       color: var(--blue);
     }
 
-    .topbar-hint {
-      font-size: 10px;
-      color: var(--muted);
-      font-family: 'Space Mono', monospace;
-      text-align: right;
-      line-height: 1.4;
-    }
-
-    /* ── middle hint ── */
-    #midHint {
+    /* scanning ring shown in the middle while looking for surface */
+    #scanHint {
       pointer-events: none;
       position: fixed;
-      top: 50%;
-      left: 50%;
+      top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
+      transition: opacity 0.5s;
     }
 
-    .hint-ring {
-      width: 100px; height: 100px;
-      border: 2px solid rgba(74,158,255,0.6);
+    .scan-ring {
+      width: 110px; height: 110px;
+      border: 2px solid rgba(74,158,255,0.5);
       border-radius: 50%;
       margin: 0 auto 14px;
       animation: pulse 2s ease-in-out infinite;
+      position: relative;
     }
 
+    /* corner brackets on the scan ring */
+    .scan-ring::before, .scan-ring::after {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      border-style: solid;
+      border-color: var(--orange);
+    }
+    .scan-ring::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    .scan-ring::after  { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+
     @keyframes pulse {
-      0%,100% { transform: scale(1); opacity: 0.8; }
+      0%,100% { transform: scale(1); opacity: 0.9; }
       50%      { transform: scale(1.1); opacity: 0.4; }
     }
 
-    .hint-pill {
+    .scan-pill {
       background: var(--bg);
       backdrop-filter: blur(8px);
       border: 1px solid var(--border);
@@ -150,10 +243,36 @@
       font-size: 12px;
       font-family: 'Space Mono', monospace;
       color: var(--text);
+    }
+
+    /* tap to place button shown when surface is found */
+    #tapBtn {
+      pointer-events: all;
+      display: none;
+      position: fixed;
+      bottom: 200px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 100px;
+      padding: 14px 28px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 0 30px rgba(74,158,255,0.4);
+      animation: glow 2s ease-in-out infinite;
       white-space: nowrap;
     }
 
-    /* ── fit panel top right ── */
+    @keyframes glow {
+      0%,100% { box-shadow: 0 0 20px rgba(74,158,255,0.4); }
+      50%      { box-shadow: 0 0 40px rgba(74,158,255,0.8); }
+    }
+
+    /* fit panel top right */
     #fitPanel {
       pointer-events: none;
       position: fixed;
@@ -166,6 +285,7 @@
       font-family: 'Space Mono', monospace;
       font-size: 11px;
       min-width: 145px;
+      line-height: 1.7;
     }
 
     #fitPanel h4 {
@@ -180,7 +300,7 @@
     .warn { color: var(--yellow); }
     .bad  { color: var(--red); }
 
-    /* ── bottom panel ── */
+    /* bottom panel */
     #bottomPanel {
       pointer-events: all;
       background: var(--bg);
@@ -207,11 +327,7 @@
       transition: all 0.2s;
       text-align: center;
     }
-
-    .tab.active {
-      color: var(--blue);
-      border-bottom-color: var(--blue);
-    }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 
     .tab-pane { display: none; padding: 14px 16px; }
     .tab-pane.active { display: block; }
@@ -246,10 +362,9 @@
       outline: none;
       transition: border-color 0.2s;
     }
-
     .field input:focus { border-color: var(--blue); }
 
-    /* color swatches */
+    /* swatches */
     .swatches {
       display: flex;
       align-items: center;
@@ -257,7 +372,6 @@
       margin-bottom: 12px;
       flex-wrap: wrap;
     }
-
     .swatches label {
       font-size: 10px;
       color: var(--muted);
@@ -265,7 +379,6 @@
       text-transform: uppercase;
       letter-spacing: 1px;
     }
-
     .swatch {
       width: 24px; height: 24px;
       border-radius: 50%;
@@ -275,7 +388,7 @@
       display: inline-block;
     }
     .swatch:hover { transform: scale(1.2); }
-    .swatch.sel { border-color: white; transform: scale(1.2); }
+    .swatch.sel   { border-color: white; transform: scale(1.2); }
 
     /* buttons */
     .btn {
@@ -320,16 +433,16 @@
     .obj-card:hover  { border-color: rgba(74,158,255,0.4); }
     .obj-card.active { border-color: var(--blue); background: rgba(74,158,255,0.08); }
 
-    .obj-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .obj-dot  { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
     .obj-info { flex: 1; min-width: 0; }
     .obj-name { font-size: 13px; font-weight: 500; }
     .obj-dim  { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
 
     .obj-del {
       background: none; border: none;
-      color: var(--muted); cursor: pointer; font-size: 16px;
-      padding: 2px 6px; border-radius: 4px;
-      transition: color 0.2s;
+      color: var(--muted); cursor: pointer;
+      font-size: 16px; padding: 2px 6px;
+      border-radius: 4px; transition: color 0.2s;
     }
     .obj-del:hover { color: var(--red); }
 
@@ -349,90 +462,121 @@
 </head>
 <body>
 
-<!--
-  ════════════════════════════════════════
-  AR SCENE using A-Frame + AR.js
-  The user points at a Hiro marker.
-  All the 3D boxes appear on top of the marker.
-  This works on ALL phones - iPhone and Android.
-  ════════════════════════════════════════
--->
-<a-scene
-  embedded
-  arjs="sourceType: webcam; debugUIEnabled: false;"
-  vr-mode-ui="enabled: false"
-  renderer="logarithmicDepthBuffer: true; antialias: true;"
->
+<!-- ════════════════════════════════════════
+     SPLASH SCREEN
+     Shown before AR starts.
+     Explains how to use the app.
+════════════════════════════════════════ -->
+<div id="splash">
 
-  <!-- Hiro marker - everything inside appears on top of it -->
-  <a-marker
-    id="marker"
-    preset="hiro"
-    smooth="true"
-    smoothCount="10"
-    smoothTolerance="0.01"
-    smoothThreshold="5"
+  <div class="splash-logo">سعة <span>·</span></div>
+  <div style="font-family:'Space Mono',monospace;font-size:14px;color:var(--blue)">Sa'ah — AR Space Organizer</div>
+  <div class="splash-sub">Visualize your items in 3D before you pack them. Save time, save effort.</div>
+
+  <!-- shown only on iPhone -->
+  <div id="iosWarn">
+    ⚠️ iPhone detected.<br/>
+    This app uses WebXR which requires <strong>Android + Chrome</strong>.<br/>
+    Please open this link on an Android phone for the full AR experience.
+  </div>
+
+  <!-- steps guide -->
+  <div class="splash-steps">
+    <h3>How to use</h3>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>Tap <strong>Start AR</strong> and allow camera access</div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>Point camera at a <strong>flat surface</strong> (floor, table, car boot)</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>When grid appears, <strong>tap to place</strong> your objects</div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div>Add objects from the panel and see if they fit!</div>
+    </div>
+  </div>
+
+  <button class="btn-start" onclick="startAR()">Start AR Experience →</button>
+
+</div>
+
+
+<!-- ════════════════════════════════════════
+     A-FRAME SCENE (WebXR markerless AR)
+     Hidden until user taps Start.
+     hit-test feature lets us detect surfaces.
+════════════════════════════════════════ -->
+<div id="arScene">
+  <a-scene
+    webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay; overlayElement: #ui;"
+    renderer="colorManagement: true;"
+    vr-mode-ui="enabled: false"
   >
 
-    <!-- the floor grid of the space -->
-    <a-plane
-      rotation="-90 0 0"
-      width="3" height="3"
-      color="#080C18"
-      opacity="0.7"
-      material="transparent: true; side: double"
-    ></a-plane>
+    <!-- reticle: the dot/ring that shows where surface is detected -->
+    <!-- it follows the surface as you move the camera -->
+    <a-entity id="reticle" visible="false">
+      <!-- outer ring -->
+      <a-torus
+        radius="0.08"
+        radius-tubular="0.005"
+        color="#4A9EFF"
+        opacity="0.9"
+        rotation="-90 0 0"
+      ></a-torus>
+      <!-- inner dot -->
+      <a-sphere
+        radius="0.015"
+        color="#4A9EFF"
+        opacity="0.7"
+        position="0 0.001 0"
+      ></a-sphere>
+    </a-entity>
 
-    <!-- grid lines - horizontal -->
-    <a-box position="0 0.002 -1"   width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position="0 0.002 -0.5" width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position="0 0.002  0"   width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position="0 0.002  0.5" width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position="0 0.002  1"   width="3" height="0.003" depth="0.01" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-
-    <!-- grid lines - vertical -->
-    <a-box position="-1   0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position="-0.5 0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position=" 0   0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position=" 0.5 0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-    <a-box position=" 1   0.002 0" width="0.01" height="0.003" depth="3" color="#4A9EFF" opacity="0.3" material="transparent:true"></a-box>
-
-    <!-- space boundary walls (transparent blue walls to show the space) -->
-    <a-box position="0 0.5  1.5" width="3" height="1" depth="0.02" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
-    <a-box position="0 0.5 -1.5" width="3" height="1" depth="0.02" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
-    <a-box position=" 1.5 0.5 0" width="0.02" height="1" depth="3" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
-    <a-box position="-1.5 0.5 0" width="0.02" height="1" depth="3" color="#4A9EFF" opacity="0.08" material="transparent:true"></a-box>
-
-    <!-- this is where all the user's boxes go -->
+    <!-- all placed boxes go here -->
     <a-entity id="boxContainer"></a-entity>
 
-  </a-marker>
+    <!-- camera -->
+    <a-camera>
+      <!-- cursor for WebXR interaction -->
+      <a-cursor
+        id="cursor"
+        fuse="false"
+        visible="false"
+      ></a-cursor>
+    </a-camera>
 
-  <!-- camera needed for AR.js -->
-  <a-entity camera></a-entity>
-
-</a-scene>
+  </a-scene>
+</div>
 
 
-<!--
-  ════════════════════════════════════════
-  UI OVERLAY
-  ════════════════════════════════════════
--->
+<!-- ════════════════════════════════════════
+     UI OVERLAY
+════════════════════════════════════════ -->
 <div id="ui">
 
   <!-- top bar -->
   <div class="topbar">
     <div class="logo">سعة <em>·</em> Sa'ah</div>
     <div id="capBadge">0 objects</div>
-    <div class="topbar-hint">Point at<br/>Hiro marker</div>
+    <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-align:right">Scan floor<br/>to start</div>
   </div>
 
-  <!-- scanning hint shown in the middle of the screen -->
-  <div id="midHint">
-    <div class="hint-ring"></div>
-    <div class="hint-pill" id="hintText">Point camera at Hiro marker 🎯</div>
+  <!-- scanning animation while looking for surface -->
+  <div id="scanHint">
+    <div class="scan-ring"></div>
+    <div class="scan-pill" id="scanText">Move camera slowly over a flat surface</div>
   </div>
+
+  <!-- tap to place button (appears when surface is found) -->
+  <button id="tapBtn" onclick="placeNextObject()">
+    👆 Tap to place object here
+  </button>
 
   <!-- fit analysis -->
   <div id="fitPanel">
@@ -444,7 +588,7 @@
   <div id="bottomPanel">
 
     <div class="tabs">
-      <button class="tab active" onclick="showTab('add',this)">➕ Add Object</button>
+      <button class="tab active" onclick="showTab('add',this)">➕ Add</button>
       <button class="tab"        onclick="showTab('list',this)">📦 Objects</button>
       <button class="tab"        onclick="showTab('space',this)">📐 Space</button>
     </div>
@@ -473,7 +617,10 @@
         <label>Color</label>
         <div id="swatchRow"></div>
       </div>
-      <button class="btn btn-blue btn-full" onclick="addObject()">Place in AR Scene</button>
+      <!-- clicking this queues the object to be placed on next tap -->
+      <button class="btn btn-blue btn-full" onclick="queueObject()">
+        Queue Object → Then Tap Floor to Place
+      </button>
     </div>
 
     <!-- LIST TAB -->
@@ -482,38 +629,28 @@
         <div class="empty">No objects yet!</div>
       </div>
       <div class="btn-row">
-        <button class="btn btn-ghost"  style="flex:1;font-size:12px" onclick="rotateSelected()">↻ Rotate</button>
-        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="removeSelected()">✕ Remove</button>
-        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="clearAll()">🗑 All</button>
+        <button class="btn btn-ghost"  style="flex:1;font-size:12px" onclick="removeSelected()">✕ Remove</button>
+        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="clearAll()">🗑 Clear All</button>
       </div>
     </div>
 
     <!-- SPACE TAB -->
     <div class="tab-pane" id="tab-space">
       <p style="font-size:11px;color:var(--muted);margin-bottom:10px;font-family:'Space Mono',monospace">
-        Set the real size of the space you want to fill:
+        Set the real dimensions of your space:
       </p>
       <div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(120,100,80)">🚗 Car Boot</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(35,20,45)">🎒 Backpack</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(50,25,70)">🧳 Suitcase</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(120,100,80)">🚗 Car</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(35,20,45)">🎒 Bag</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(50,25,70)">🧳 Case</button>
         <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(90,40,200)">📦 Shelf</button>
       </div>
       <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
-        <div class="field">
-          <label>W cm</label>
-          <input type="number" id="spaceW" value="120" />
-        </div>
-        <div class="field">
-          <label>D cm</label>
-          <input type="number" id="spaceD" value="100" />
-        </div>
-        <div class="field">
-          <label>H cm</label>
-          <input type="number" id="spaceH" value="80" />
-        </div>
+        <div class="field"><label>W cm</label><input type="number" id="spaceW" value="120" /></div>
+        <div class="field"><label>D cm</label><input type="number" id="spaceD" value="100" /></div>
+        <div class="field"><label>H cm</label><input type="number" id="spaceH" value="80"  /></div>
       </div>
-      <button class="btn btn-orange btn-full" onclick="applySpace()">Apply Space</button>
+      <button class="btn btn-orange btn-full" onclick="applySpace()">Apply Space Size</button>
     </div>
 
   </div>
@@ -522,33 +659,229 @@
 
 <script>
 // ════════════════════════════════════════
-// APP STATE
+// APP STATE — everything the app needs
 // ════════════════════════════════════════
 const app = {
-  objects:     [],           // all objects added by user
-  selectedId:  null,         // currently selected object id
-  nextId:      1,            // auto increment id
-  color:       '#4A9EFF',    // currently picked color
-  space:       { w:120, d:100, h:80 }, // space dimensions in cm
+  objects:    [],         // list of all placed objects
+  selectedId: null,       // which object is selected
+  nextId:     1,          // auto increment id
+  color:      '#4A9EFF',  // current color choice
+  queued:     null,       // object waiting to be placed on tap
+  reticlePos: null,       // current reticle world position
+  surfaceFound: false,    // has a surface been detected?
 
-  // available colors
+  space: { w: 120, d: 100, h: 80 }, // space dimensions in cm
+
   colors: ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
-
-  // grid positions where boxes get placed (x, z in A-Frame units)
-  // we have a 3x3 unit grid so positions go from -1 to 1
-  slots: [
-    [-0.8, 0.8], [0, 0.8], [0.8, 0.8],
-    [-0.8, 0  ], [0, 0  ], [0.8, 0  ],
-    [-0.8,-0.8], [0,-0.8], [0.8,-0.8],
-  ],
 };
 
-// 1 cm = this many A-Frame units
-// we use 1 unit = 100cm so 50cm = 0.5 units
+// 1 cm = this many meters in WebXR/A-Frame world units
+// A-Frame uses meters, so 50cm = 0.5 meters
 const CM = 0.01;
 
 // ════════════════════════════════════════
-// BUILD COLOR SWATCHES
+// CHECK IF iOS (WebXR doesn't work on iPhone)
+// ════════════════════════════════════════
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+// show iOS warning on the splash screen if needed
+if (isIOS()) {
+  document.getElementById('iosWarn').style.display = 'block';
+}
+
+// ════════════════════════════════════════
+// START AR — hide splash, show AR scene
+// ════════════════════════════════════════
+function startAR() {
+  document.getElementById('splash').style.display  = 'none';
+  document.getElementById('arScene').style.display = 'block';
+  document.getElementById('ui').style.display      = 'flex';
+
+  // wait for the A-Frame scene to be ready then set up WebXR hit testing
+  const scene = document.querySelector('a-scene');
+  scene.addEventListener('loaded', setupWebXR);
+}
+
+// ════════════════════════════════════════
+// SETUP WebXR HIT TEST
+// This is what detects flat surfaces.
+// The reticle follows the detected surface.
+// ════════════════════════════════════════
+let xrHitTestSource = null; // the hit test source from WebXR
+let xrSession       = null; // the active WebXR session
+
+function setupWebXR() {
+  const scene    = document.querySelector('a-scene');
+  const renderer = scene.renderer;
+  const xr       = renderer.xr;
+
+  // listen for when WebXR session starts
+  scene.addEventListener('enter-vr', async () => {
+    xrSession = xr.getSession();
+
+    if (!xrSession) return;
+
+    // request a reference space for hit testing
+    // this tells WebXR we want to detect surfaces
+    const refSpace = await xrSession.requestReferenceSpace('viewer');
+
+    // create the hit test source
+    // every frame we use this to find where the camera is pointing at a surface
+    xrHitTestSource = await xrSession.requestHitTestSource({ space: refSpace });
+
+    // listen for each rendered frame to update the reticle position
+    xrSession.addEventListener('select', onSelect);
+  });
+
+  // update reticle on every frame
+  scene.renderer.setAnimationLoop((time, xrFrame) => {
+    if (!xrFrame || !xrHitTestSource) return;
+
+    // get the hit test results for this frame
+    const hitResults = xrFrame.getHitTestResults(xrHitTestSource);
+
+    if (hitResults.length > 0) {
+      // surface detected!
+      const hit  = hitResults[0];
+      const pose = hit.getPose(xr.getReferenceSpace());
+
+      if (pose) {
+        // show the reticle at the hit position
+        const reticle = document.getElementById('reticle');
+        reticle.setAttribute('visible', 'true');
+
+        const p = pose.transform.position;
+        reticle.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
+
+        // save this position for when user taps
+        app.reticlePos = { x: p.x, y: p.y, z: p.z };
+        app.surfaceFound = true;
+
+        // show the tap button if an object is queued
+        if (app.queued) {
+          document.getElementById('tapBtn').style.display = 'block';
+          document.getElementById('scanHint').style.opacity = '0';
+        } else {
+          document.getElementById('scanHint').style.opacity = '0';
+          document.getElementById('scanText').textContent = '✓ Surface found! Add an object below';
+        }
+      }
+    } else {
+      // no surface found yet
+      app.surfaceFound = false;
+      document.getElementById('reticle').setAttribute('visible', 'false');
+      document.getElementById('scanHint').style.opacity = '1';
+    }
+  });
+}
+
+// ════════════════════════════════════════
+// ON SELECT — fires when user taps screen in AR
+// ════════════════════════════════════════
+function onSelect() {
+  if (app.queued && app.reticlePos) {
+    placeNextObject();
+  }
+}
+
+// ════════════════════════════════════════
+// QUEUE OBJECT — gets it ready to place
+// Called when user taps "Queue Object"
+// ════════════════════════════════════════
+function queueObject() {
+  const name = document.getElementById('objName').value.trim() || 'Box';
+  const w    = parseFloat(document.getElementById('objW').value);
+  const d    = parseFloat(document.getElementById('objD').value);
+  const h    = parseFloat(document.getElementById('objH').value);
+
+  if (!w || !d || !h) { alert('Please enter all dimensions (W, D, H)!'); return; }
+
+  // save the object details ready to be placed
+  app.queued = { name, w, d, h, color: app.color };
+
+  // update the tap button text
+  document.getElementById('tapBtn').textContent = `👆 Tap floor to place "${name}"`;
+
+  if (app.surfaceFound) {
+    document.getElementById('tapBtn').style.display = 'block';
+  }
+
+  alert(`"${name}" is ready! Now tap the floor in the AR view to place it.`);
+}
+
+// ════════════════════════════════════════
+// PLACE NEXT OBJECT at reticle position
+// ════════════════════════════════════════
+function placeNextObject() {
+  if (!app.queued || !app.reticlePos) return;
+
+  const obj = app.queued;
+  const id  = app.nextId++;
+  const pos = app.reticlePos;
+
+  // store it in our list
+  app.objects.push({ id, ...obj });
+  app.queued = null;
+
+  // convert cm to meters for A-Frame
+  const aw = obj.w * CM;
+  const ad = obj.d * CM;
+  const ah = obj.h * CM;
+
+  // create the 3D box entity
+  const container = document.getElementById('boxContainer');
+  const parent    = document.createElement('a-entity');
+  parent.id = 'obj-' + id;
+  // place at reticle position, raise by half height so it sits on the surface
+  parent.setAttribute('position', `${pos.x} ${pos.y + ah/2} ${pos.z}`);
+
+  // the actual box
+  const box = document.createElement('a-box');
+  box.id = 'box-' + id;
+  box.setAttribute('width',  aw);
+  box.setAttribute('height', ah);
+  box.setAttribute('depth',  ad);
+  box.setAttribute('material', `color: ${obj.color}; opacity: 0.72; transparent: true`);
+
+  // wireframe on top for that AR look
+  const wire = document.createElement('a-box');
+  wire.id = 'wire-' + id;
+  wire.setAttribute('width',  aw + 0.005);
+  wire.setAttribute('height', ah + 0.005);
+  wire.setAttribute('depth',  ad + 0.005);
+  wire.setAttribute('material', `wireframe: true; color: ${obj.color}`);
+
+  // text label above the box
+  const label = document.createElement('a-text');
+  label.setAttribute('value', `${obj.name}\n${obj.w}x${obj.d}x${obj.h}cm`);
+  label.setAttribute('align', 'center');
+  label.setAttribute('color', '#ffffff');
+  label.setAttribute('scale', '0.15 0.15 0.15');
+  label.setAttribute('position', `0 ${ah/2 + 0.06} 0`);
+  label.setAttribute('look-at', '[camera]');
+
+  parent.appendChild(box);
+  parent.appendChild(wire);
+  parent.appendChild(label);
+  container.appendChild(parent);
+
+  // clear inputs
+  document.getElementById('objName').value = '';
+  document.getElementById('objW').value    = '';
+  document.getElementById('objD').value    = '';
+  document.getElementById('objH').value    = '';
+
+  // hide the tap button
+  document.getElementById('tapBtn').style.display = 'none';
+
+  renderList();
+  updateFit();
+}
+
+// ════════════════════════════════════════
+// COLOR SWATCHES
 // ════════════════════════════════════════
 function buildSwatches() {
   const row = document.getElementById('swatchRow');
@@ -557,7 +890,6 @@ function buildSwatches() {
     s.className = 'swatch' + (c === app.color ? ' sel' : '');
     s.style.background = c;
     s.onclick = () => {
-      // deselect all then select this one
       document.querySelectorAll('.swatch').forEach(x => x.classList.remove('sel'));
       s.classList.add('sel');
       app.color = c;
@@ -595,130 +927,13 @@ function applySpace() {
 }
 
 // ════════════════════════════════════════
-// ADD OBJECT TO AR SCENE
-// ════════════════════════════════════════
-function addObject() {
-  const name = document.getElementById('objName').value.trim() || 'Box';
-  const w    = parseFloat(document.getElementById('objW').value);
-  const d    = parseFloat(document.getElementById('objD').value);
-  const h    = parseFloat(document.getElementById('objH').value);
-
-  if (!w || !d || !h) {
-    alert('Please fill in all dimensions (W, D, H)!');
-    return;
-  }
-
-  // warn if object is too big for the space
-  if (w > app.space.w || d > app.space.d) {
-    if (!confirm(`This object (${w}×${d}cm) might be too big for the space (${app.space.w}×${app.space.d}cm). Add anyway?`)) return;
-  }
-
-  const id  = app.nextId++;
-  const idx = app.objects.length % app.slots.length; // pick next slot
-  const pos = app.slots[idx];
-
-  const obj = { id, name, w, d, h, color: app.color, rot: 0 };
-  app.objects.push(obj);
-
-  // convert cm to A-Frame units
-  const aw = w * CM;
-  const ad = d * CM;
-  const ah = h * CM;
-
-  // create the A-Frame entity for this box
-  const container = document.getElementById('boxContainer');
-
-  const parent = document.createElement('a-entity');
-  parent.id = 'obj-' + id;
-  // y = half height so box sits on the floor, not inside it
-  parent.setAttribute('position', `${pos[0]} ${ah/2} ${pos[1]}`);
-
-  // the actual 3D box
-  const box = document.createElement('a-box');
-  box.id = 'box-' + id;
-  box.setAttribute('width',  aw);
-  box.setAttribute('height', ah);
-  box.setAttribute('depth',  ad);
-  box.setAttribute('material', `color: ${obj.color}; opacity: 0.72; transparent: true`);
-
-  // wireframe overlay for that AR look
-  const wire = document.createElement('a-box');
-  wire.id = 'wire-' + id;
-  wire.setAttribute('width',  aw + 0.005);
-  wire.setAttribute('height', ah + 0.005);
-  wire.setAttribute('depth',  ad + 0.005);
-  wire.setAttribute('material', `wireframe: true; color: ${obj.color}`);
-
-  // text label floating above the box
-  const label = document.createElement('a-text');
-  label.setAttribute('value', `${name}\n${w}x${d}x${h}cm`);
-  label.setAttribute('align', 'center');
-  label.setAttribute('color', '#ffffff');
-  label.setAttribute('scale', '0.22 0.22 0.22');
-  label.setAttribute('position', `0 ${ah/2 + 0.08} 0`);
-  label.setAttribute('look-at', '[camera]');
-
-  parent.appendChild(box);
-  parent.appendChild(wire);
-  parent.appendChild(label);
-  container.appendChild(parent);
-
-  // clear the input fields
-  document.getElementById('objName').value = '';
-  document.getElementById('objW').value    = '';
-  document.getElementById('objD').value    = '';
-  document.getElementById('objH').value    = '';
-
-  renderList();
-  updateFit();
-  setHint('✓ ' + name + ' placed in AR!');
-  setTimeout(() => setHint('Point camera at Hiro marker 🎯'), 2500);
-}
-
-// ════════════════════════════════════════
-// SELECT OBJECT (highlights it)
+// SELECT / REMOVE OBJECTS
 // ════════════════════════════════════════
 function selectObj(id) {
   app.selectedId = id;
-
-  app.objects.forEach(o => {
-    const box = document.getElementById('box-' + o.id);
-    if (!box) return;
-    if (o.id === id) {
-      // pulse animation to show selection
-      box.setAttribute('animation', 'property: scale; from: 1 1 1; to: 1.1 1.1 1.1; loop: true; dur: 500; dir: alternate; easing: easeInOutSine');
-    } else {
-      box.removeAttribute('animation');
-      box.setAttribute('scale', '1 1 1');
-    }
-  });
-
   renderList();
 }
 
-// ════════════════════════════════════════
-// ROTATE SELECTED (swaps W and D = 90 deg)
-// ════════════════════════════════════════
-function rotateSelected() {
-  if (!app.selectedId) { alert('Select an object from the list first!'); return; }
-  const obj = app.objects.find(o => o.id === app.selectedId);
-  if (!obj) return;
-
-  // swap width and depth to simulate rotation
-  [obj.w, obj.d] = [obj.d, obj.w];
-
-  // update the 3D box dimensions
-  const box  = document.getElementById('box-' + obj.id);
-  const wire = document.getElementById('wire-' + obj.id);
-  if (box)  { box.setAttribute('width',  obj.w * CM); box.setAttribute('depth',  obj.d * CM); }
-  if (wire) { wire.setAttribute('width', obj.w * CM + 0.005); wire.setAttribute('depth', obj.d * CM + 0.005); }
-
-  renderList();
-}
-
-// ════════════════════════════════════════
-// REMOVE OBJECTS
-// ════════════════════════════════════════
 function removeSelected() {
   if (!app.selectedId) { alert('Select an object from the list first!'); return; }
   removeById(app.selectedId);
@@ -735,7 +950,7 @@ function removeById(id) {
 
 function clearAll() {
   if (!app.objects.length) return;
-  if (!confirm('Remove all objects from the AR scene?')) return;
+  if (!confirm('Remove all objects?')) return;
   app.objects.forEach(o => {
     const el = document.getElementById('obj-' + o.id);
     if (el) el.parentNode.removeChild(el);
@@ -747,7 +962,7 @@ function clearAll() {
 }
 
 // ════════════════════════════════════════
-// RENDER OBJECT LIST IN SIDEBAR
+// RENDER OBJECT LIST
 // ════════════════════════════════════════
 function renderList() {
   const list = document.getElementById('objList');
@@ -755,7 +970,7 @@ function renderList() {
     app.objects.length + ' object' + (app.objects.length !== 1 ? 's' : '');
 
   if (!app.objects.length) {
-    list.innerHTML = '<div class="empty">No objects yet!</div>';
+    list.innerHTML = '<div class="empty">No objects placed yet!</div>';
     return;
   }
 
@@ -778,7 +993,7 @@ function renderList() {
 
 // ════════════════════════════════════════
 // FIT ANALYSIS
-// Calculates how full the space is
+// Calculates what % of the space is used
 // ════════════════════════════════════════
 function updateFit() {
   const spaceVol = app.space.w * app.space.d * app.space.h;
@@ -794,33 +1009,6 @@ function updateFit() {
   else if (pct < 85) { el.className = 'warn'; el.textContent = `⚠ ${pct}% full\nGetting tight`; }
   else               { el.className = 'bad';  el.textContent = `✗ ${pct}% full\nWon't fit!`; }
 }
-
-// ════════════════════════════════════════
-// HINT TEXT IN THE MIDDLE
-// ════════════════════════════════════════
-function setHint(msg) {
-  document.getElementById('hintText').textContent = msg;
-}
-
-// ════════════════════════════════════════
-// MARKER DETECTION EVENTS
-// Hide the hint when marker is found
-// ════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
-  const marker = document.getElementById('marker');
-  if (!marker) return;
-
-  marker.addEventListener('markerFound', () => {
-    // hide the pulsing hint when marker is detected
-    document.getElementById('midHint').style.opacity = '0';
-    setHint('✓ Marker found! Objects are in AR');
-  });
-
-  marker.addEventListener('markerLost', () => {
-    document.getElementById('midHint').style.opacity = '1';
-    setHint('Point camera at Hiro marker 🎯');
-  });
-});
 </script>
 </body>
 </html>
