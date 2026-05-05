@@ -6,13 +6,14 @@
   <title>سعة — AR Space Organizer</title>
 
   <!--
-    We use A-Frame with WebXR for markerless AR.
-    WebXR uses Google ARCore which is built into Android phones.
-    This means no marker needed — the camera detects the real floor/surface
-    and we place 3D boxes on top of it.
+    How this works:
+    1. We use getUserMedia() to open the phone camera as a video element
+    2. That video fills the whole screen as the "AR background"
+    3. A-Frame sits on top with a transparent background to show 3D boxes
+    4. The user taps the screen to place boxes which appear to sit on the real surface
+    This approach works on ALL phones - iPhone and Android - no marker needed!
   -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet" />
 
   <style>
@@ -24,7 +25,6 @@
       --green:  #4ade80;
       --red:    #f87171;
       --yellow: #facc15;
-      --purple: #a78bfa;
       --bg:     rgba(8, 12, 24, 0.88);
       --border: rgba(74, 158, 255, 0.2);
       --text:   #E8F0FF;
@@ -40,7 +40,45 @@
       width: 100vw;
     }
 
-    /* ── splash screen (shown before AR starts) ── */
+    /* ── camera video fills the whole screen as AR background ── */
+    #cameraFeed {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover; /* fills screen without stretching */
+      z-index: 0;        /* sits behind everything */
+    }
+
+    /* ── A-Frame scene sits on top of the camera feed ── */
+    /* background is transparent so camera shows through */
+    a-scene {
+      position: fixed !important;
+      top: 0; left: 0;
+      width: 100% !important;
+      height: 100% !important;
+      z-index: 1;
+      background: transparent !important;
+    }
+
+    /* make the A-Frame canvas transparent */
+    canvas {
+      background: transparent !important;
+    }
+
+    /* ── UI sits on top of everything ── */
+    #ui {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 10;
+      pointer-events: none; /* clicks pass through to AR by default */
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* ── splash screen ── */
     #splash {
       position: fixed;
       inset: 0;
@@ -51,32 +89,31 @@
       align-items: center;
       justify-content: center;
       gap: 20px;
-      padding: 40px;
+      padding: 32px;
       text-align: center;
     }
 
     .splash-logo {
       font-family: 'Space Mono', monospace;
-      font-size: 48px;
+      font-size: 52px;
       font-weight: 700;
       color: var(--blue);
       line-height: 1;
     }
-
     .splash-logo span { color: var(--orange); }
 
-    .splash-sub {
-      font-size: 16px;
+    .splash-tagline {
+      font-size: 15px;
       color: var(--muted);
-      line-height: 1.5;
-      max-width: 300px;
+      max-width: 280px;
+      line-height: 1.6;
     }
 
     .splash-steps {
       background: rgba(74,158,255,0.05);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 20px;
+      padding: 18px;
       text-align: left;
       width: 100%;
       max-width: 320px;
@@ -104,7 +141,7 @@
     .step-num {
       width: 22px; height: 22px;
       border-radius: 50%;
-      background: rgba(74,158,255,0.2);
+      background: rgba(74,158,255,0.15);
       border: 1px solid var(--blue);
       color: var(--blue);
       font-family: 'Space Mono', monospace;
@@ -113,19 +150,6 @@
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-    }
-
-    /* ios warning inside splash */
-    #iosWarn {
-      display: none;
-      background: rgba(248,113,113,0.1);
-      border: 1px solid rgba(248,113,113,0.3);
-      border-radius: 12px;
-      padding: 14px 18px;
-      font-size: 13px;
-      color: var(--red);
-      line-height: 1.5;
-      max-width: 320px;
     }
 
     .btn-start {
@@ -143,33 +167,8 @@
       transition: opacity 0.2s, transform 0.1s;
     }
     .btn-start:active { transform: scale(0.97); }
-    .btn-start:hover  { opacity: 0.88; }
 
-    /* ── AR scene fills full screen ── */
-    #arScene {
-      display: none; /* hidden until user taps Start */
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-    }
-
-    a-scene {
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* ── UI overlay on top of AR ── */
-    #ui {
-      display: none; /* hidden until AR starts */
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      pointer-events: none;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    /* top bar */
+    /* ── top bar ── */
     .topbar {
       pointer-events: all;
       display: flex;
@@ -199,58 +198,11 @@
       color: var(--blue);
     }
 
-    /* scanning ring shown in the middle while looking for surface */
-    #scanHint {
-      pointer-events: none;
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      transition: opacity 0.5s;
-    }
-
-    .scan-ring {
-      width: 110px; height: 110px;
-      border: 2px solid rgba(74,158,255,0.5);
-      border-radius: 50%;
-      margin: 0 auto 14px;
-      animation: pulse 2s ease-in-out infinite;
-      position: relative;
-    }
-
-    /* corner brackets on the scan ring */
-    .scan-ring::before, .scan-ring::after {
-      content: '';
-      position: absolute;
-      width: 18px; height: 18px;
-      border-style: solid;
-      border-color: var(--orange);
-    }
-    .scan-ring::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
-    .scan-ring::after  { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
-
-    @keyframes pulse {
-      0%,100% { transform: scale(1); opacity: 0.9; }
-      50%      { transform: scale(1.1); opacity: 0.4; }
-    }
-
-    .scan-pill {
-      background: var(--bg);
-      backdrop-filter: blur(8px);
-      border: 1px solid var(--border);
-      border-radius: 100px;
-      padding: 8px 16px;
-      font-size: 12px;
-      font-family: 'Space Mono', monospace;
-      color: var(--text);
-    }
-
-    /* tap to place button shown when surface is found */
-    #tapBtn {
+    /* ── place button in the middle of screen ── */
+    #placeBtn {
       pointer-events: all;
-      display: none;
       position: fixed;
-      bottom: 200px;
+      bottom: 220px;
       left: 50%;
       transform: translateX(-50%);
       background: var(--blue);
@@ -262,17 +214,48 @@
       font-size: 15px;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: 0 0 30px rgba(74,158,255,0.4);
-      animation: glow 2s ease-in-out infinite;
+      display: none; /* shown only when object is queued */
       white-space: nowrap;
+      animation: glow 2s ease-in-out infinite;
+      box-shadow: 0 0 30px rgba(74,158,255,0.5);
     }
 
     @keyframes glow {
       0%,100% { box-shadow: 0 0 20px rgba(74,158,255,0.4); }
-      50%      { box-shadow: 0 0 40px rgba(74,158,255,0.8); }
+      50%      { box-shadow: 0 0 50px rgba(74,158,255,0.9); }
     }
 
-    /* fit panel top right */
+    /* crosshair in the center of screen for aiming */
+    #crosshair {
+      pointer-events: none;
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      display: none; /* shown when object is queued */
+    }
+
+    .crosshair-ring {
+      width: 60px; height: 60px;
+      border: 2px solid rgba(74,158,255,0.8);
+      border-radius: 50%;
+      position: relative;
+      animation: pulse-ring 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-ring {
+      0%,100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.2); opacity: 0.5; }
+    }
+
+    .crosshair-ring::before, .crosshair-ring::after {
+      content: '';
+      position: absolute;
+      background: var(--blue);
+    }
+    .crosshair-ring::before { width: 1px; height: 20px; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+    .crosshair-ring::after  { width: 20px; height: 1px; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+
+    /* ── fit panel ── */
     #fitPanel {
       pointer-events: none;
       position: fixed;
@@ -300,7 +283,7 @@
     .warn { color: var(--yellow); }
     .bad  { color: var(--red); }
 
-    /* bottom panel */
+    /* ── bottom panel ── */
     #bottomPanel {
       pointer-events: all;
       background: var(--bg);
@@ -332,7 +315,6 @@
     .tab-pane { display: none; padding: 14px 16px; }
     .tab-pane.active { display: block; }
 
-    /* form */
     .form-grid {
       display: grid;
       grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -364,7 +346,6 @@
     }
     .field input:focus { border-color: var(--blue); }
 
-    /* swatches */
     .swatches {
       display: flex;
       align-items: center;
@@ -390,7 +371,6 @@
     .swatch:hover { transform: scale(1.2); }
     .swatch.sel   { border-color: white; transform: scale(1.2); }
 
-    /* buttons */
     .btn {
       border: none;
       border-radius: 10px;
@@ -409,7 +389,6 @@
     .btn-ghost  { background: transparent; border: 1px solid var(--border); color: var(--muted); }
     .btn-danger { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
 
-    /* object list */
     #objList {
       max-height: 120px;
       overflow-y: auto;
@@ -462,123 +441,77 @@
 </head>
 <body>
 
-<!-- ════════════════════════════════════════
-     SPLASH SCREEN
-     Shown before AR starts.
-     Explains how to use the app.
-════════════════════════════════════════ -->
+<!-- camera video element - fills screen as AR background -->
+<video id="cameraFeed" autoplay playsinline muted></video>
+
+<!-- A-Frame scene - transparent so camera shows through -->
+<a-scene
+  background="color: transparent"
+  renderer="alpha: true; antialias: true;"
+  vr-mode-ui="enabled: false"
+  embedded
+>
+  <!-- all user boxes go here -->
+  <a-entity id="boxContainer"></a-entity>
+
+  <!-- camera positioned so objects appear in front of user -->
+  <a-camera
+    position="0 1.6 0"
+    look-controls="enabled: false"
+    wasd-controls="enabled: false"
+  ></a-camera>
+</a-scene>
+
+
+<!-- splash screen -->
 <div id="splash">
-
   <div class="splash-logo">سعة <span>·</span></div>
-  <div style="font-family:'Space Mono',monospace;font-size:14px;color:var(--blue)">Sa'ah — AR Space Organizer</div>
-  <div class="splash-sub">Visualize your items in 3D before you pack them. Save time, save effort.</div>
+  <div style="font-family:'Space Mono',monospace;font-size:13px;color:var(--blue);letter-spacing:1px">AR SPACE ORGANIZER</div>
+  <div class="splash-tagline">Visualize your items in real AR before you pack. No more guessing if it fits.</div>
 
-  <!-- shown only on iPhone -->
-  <div id="iosWarn">
-    ⚠️ iPhone detected.<br/>
-    This app uses WebXR which requires <strong>Android + Chrome</strong>.<br/>
-    Please open this link on an Android phone for the full AR experience.
-  </div>
-
-  <!-- steps guide -->
   <div class="splash-steps">
-    <h3>How to use</h3>
+    <h3>How it works</h3>
     <div class="step">
       <div class="step-num">1</div>
-      <div>Tap <strong>Start AR</strong> and allow camera access</div>
+      <div>Tap <strong>Start</strong> and allow camera access</div>
     </div>
     <div class="step">
       <div class="step-num">2</div>
-      <div>Point camera at a <strong>flat surface</strong> (floor, table, car boot)</div>
+      <div>Enter your object name and dimensions</div>
     </div>
     <div class="step">
       <div class="step-num">3</div>
-      <div>When grid appears, <strong>tap to place</strong> your objects</div>
+      <div>Tap <strong>Place Object</strong> — aim at the surface and tap</div>
     </div>
     <div class="step">
       <div class="step-num">4</div>
-      <div>Add objects from the panel and see if they fit!</div>
+      <div>See your objects in AR and check if they fit!</div>
     </div>
   </div>
 
-  <button class="btn-start" onclick="startAR()">Start AR Experience →</button>
-
+  <button class="btn-start" onclick="startApp()">Start AR →</button>
 </div>
 
 
-<!-- ════════════════════════════════════════
-     A-FRAME SCENE (WebXR markerless AR)
-     Hidden until user taps Start.
-     hit-test feature lets us detect surfaces.
-════════════════════════════════════════ -->
-<div id="arScene">
-  <a-scene
-    webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay; overlayElement: #ui;"
-    renderer="colorManagement: true;"
-    vr-mode-ui="enabled: false"
-  >
-
-    <!-- reticle: the dot/ring that shows where surface is detected -->
-    <!-- it follows the surface as you move the camera -->
-    <a-entity id="reticle" visible="false">
-      <!-- outer ring -->
-      <a-torus
-        radius="0.08"
-        radius-tubular="0.005"
-        color="#4A9EFF"
-        opacity="0.9"
-        rotation="-90 0 0"
-      ></a-torus>
-      <!-- inner dot -->
-      <a-sphere
-        radius="0.015"
-        color="#4A9EFF"
-        opacity="0.7"
-        position="0 0.001 0"
-      ></a-sphere>
-    </a-entity>
-
-    <!-- all placed boxes go here -->
-    <a-entity id="boxContainer"></a-entity>
-
-    <!-- camera -->
-    <a-camera>
-      <!-- cursor for WebXR interaction -->
-      <a-cursor
-        id="cursor"
-        fuse="false"
-        visible="false"
-      ></a-cursor>
-    </a-camera>
-
-  </a-scene>
-</div>
-
-
-<!-- ════════════════════════════════════════
-     UI OVERLAY
-════════════════════════════════════════ -->
+<!-- UI overlay -->
 <div id="ui">
 
   <!-- top bar -->
   <div class="topbar">
     <div class="logo">سعة <em>·</em> Sa'ah</div>
     <div id="capBadge">0 objects</div>
-    <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-align:right">Scan floor<br/>to start</div>
+    <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-align:right">AR Space<br/>Organizer</div>
   </div>
 
-  <!-- scanning animation while looking for surface -->
-  <div id="scanHint">
-    <div class="scan-ring"></div>
-    <div class="scan-pill" id="scanText">Move camera slowly over a flat surface</div>
+  <!-- crosshair shown when placing -->
+  <div id="crosshair">
+    <div class="crosshair-ring"></div>
   </div>
 
-  <!-- tap to place button (appears when surface is found) -->
-  <button id="tapBtn" onclick="placeNextObject()">
-    👆 Tap to place object here
-  </button>
+  <!-- place button shown when object is queued -->
+  <button id="placeBtn" onclick="placeObject()">👆 Tap here to place</button>
 
-  <!-- fit analysis -->
+  <!-- fit panel -->
   <div id="fitPanel">
     <h4>Fit Analysis</h4>
     <div id="fitStatus" class="ok">Add objects to start</div>
@@ -586,7 +519,6 @@
 
   <!-- bottom panel -->
   <div id="bottomPanel">
-
     <div class="tabs">
       <button class="tab active" onclick="showTab('add',this)">➕ Add</button>
       <button class="tab"        onclick="showTab('list',this)">📦 Objects</button>
@@ -617,16 +549,13 @@
         <label>Color</label>
         <div id="swatchRow"></div>
       </div>
-      <!-- clicking this queues the object to be placed on next tap -->
-      <button class="btn btn-blue btn-full" onclick="queueObject()">
-        Queue Object → Then Tap Floor to Place
-      </button>
+      <button class="btn btn-blue btn-full" onclick="queueObject()">Place Object in AR →</button>
     </div>
 
     <!-- LIST TAB -->
     <div class="tab-pane" id="tab-list">
       <div id="objList">
-        <div class="empty">No objects yet!</div>
+        <div class="empty">No objects placed yet!</div>
       </div>
       <div class="btn-row">
         <button class="btn btn-ghost"  style="flex:1;font-size:12px" onclick="removeSelected()">✕ Remove</button>
@@ -652,232 +581,69 @@
       </div>
       <button class="btn btn-orange btn-full" onclick="applySpace()">Apply Space Size</button>
     </div>
-
   </div>
 </div>
 
 
 <script>
 // ════════════════════════════════════════
-// APP STATE — everything the app needs
+// APP STATE
 // ════════════════════════════════════════
 const app = {
-  objects:    [],         // list of all placed objects
-  selectedId: null,       // which object is selected
-  nextId:     1,          // auto increment id
-  color:      '#4A9EFF',  // current color choice
-  queued:     null,       // object waiting to be placed on tap
-  reticlePos: null,       // current reticle world position
-  surfaceFound: false,    // has a surface been detected?
+  objects:    [],
+  selectedId: null,
+  nextId:     1,
+  color:      '#4A9EFF',
+  queued:     null,        // object waiting to be placed
+  space:      { w:120, d:100, h:80 },
+  colors:     ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
 
-  space: { w: 120, d: 100, h: 80 }, // space dimensions in cm
-
-  colors: ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
+  // pre-set positions in 3D space where boxes appear
+  // x = left/right, y = height, z = depth (negative = further away)
+  slots: [
+    { x:-0.4, y:0,   z:-1.5 },
+    { x: 0,   y:0,   z:-1.5 },
+    { x: 0.4, y:0,   z:-1.5 },
+    { x:-0.4, y:0,   z:-2   },
+    { x: 0,   y:0,   z:-2   },
+    { x: 0.4, y:0,   z:-2   },
+    { x:-0.4, y:0,   z:-2.5 },
+    { x: 0,   y:0,   z:-2.5 },
+    { x: 0.4, y:0,   z:-2.5 },
+  ],
 };
 
-// 1 cm = this many meters in WebXR/A-Frame world units
-// A-Frame uses meters, so 50cm = 0.5 meters
+// 1 cm in A-Frame units (A-Frame uses meters, so 1cm = 0.01m)
 const CM = 0.01;
 
 // ════════════════════════════════════════
-// CHECK IF iOS (WebXR doesn't work on iPhone)
+// START APP — open camera and show UI
 // ════════════════════════════════════════
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-}
-
-// show iOS warning on the splash screen if needed
-if (isIOS()) {
-  document.getElementById('iosWarn').style.display = 'block';
-}
-
-// ════════════════════════════════════════
-// START AR — hide splash, show AR scene
-// ════════════════════════════════════════
-function startAR() {
-  document.getElementById('splash').style.display  = 'none';
-  document.getElementById('arScene').style.display = 'block';
-  document.getElementById('ui').style.display      = 'flex';
-
-  // wait for the A-Frame scene to be ready then set up WebXR hit testing
-  const scene = document.querySelector('a-scene');
-  scene.addEventListener('loaded', setupWebXR);
-}
-
-// ════════════════════════════════════════
-// SETUP WebXR HIT TEST
-// This is what detects flat surfaces.
-// The reticle follows the detected surface.
-// ════════════════════════════════════════
-let xrHitTestSource = null; // the hit test source from WebXR
-let xrSession       = null; // the active WebXR session
-
-function setupWebXR() {
-  const scene    = document.querySelector('a-scene');
-  const renderer = scene.renderer;
-  const xr       = renderer.xr;
-
-  // listen for when WebXR session starts
-  scene.addEventListener('enter-vr', async () => {
-    xrSession = xr.getSession();
-
-    if (!xrSession) return;
-
-    // request a reference space for hit testing
-    // this tells WebXR we want to detect surfaces
-    const refSpace = await xrSession.requestReferenceSpace('viewer');
-
-    // create the hit test source
-    // every frame we use this to find where the camera is pointing at a surface
-    xrHitTestSource = await xrSession.requestHitTestSource({ space: refSpace });
-
-    // listen for each rendered frame to update the reticle position
-    xrSession.addEventListener('select', onSelect);
-  });
-
-  // update reticle on every frame
-  scene.renderer.setAnimationLoop((time, xrFrame) => {
-    if (!xrFrame || !xrHitTestSource) return;
-
-    // get the hit test results for this frame
-    const hitResults = xrFrame.getHitTestResults(xrHitTestSource);
-
-    if (hitResults.length > 0) {
-      // surface detected!
-      const hit  = hitResults[0];
-      const pose = hit.getPose(xr.getReferenceSpace());
-
-      if (pose) {
-        // show the reticle at the hit position
-        const reticle = document.getElementById('reticle');
-        reticle.setAttribute('visible', 'true');
-
-        const p = pose.transform.position;
-        reticle.setAttribute('position', `${p.x} ${p.y} ${p.z}`);
-
-        // save this position for when user taps
-        app.reticlePos = { x: p.x, y: p.y, z: p.z };
-        app.surfaceFound = true;
-
-        // show the tap button if an object is queued
-        if (app.queued) {
-          document.getElementById('tapBtn').style.display = 'block';
-          document.getElementById('scanHint').style.opacity = '0';
-        } else {
-          document.getElementById('scanHint').style.opacity = '0';
-          document.getElementById('scanText').textContent = '✓ Surface found! Add an object below';
-        }
+async function startApp() {
+  try {
+    // ask for camera permission and open the back camera
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' }, // back camera
+        width:  { ideal: 1920 },
+        height: { ideal: 1080 },
       }
-    } else {
-      // no surface found yet
-      app.surfaceFound = false;
-      document.getElementById('reticle').setAttribute('visible', 'false');
-      document.getElementById('scanHint').style.opacity = '1';
-    }
-  });
-}
+    });
 
-// ════════════════════════════════════════
-// ON SELECT — fires when user taps screen in AR
-// ════════════════════════════════════════
-function onSelect() {
-  if (app.queued && app.reticlePos) {
-    placeNextObject();
+    // plug the camera stream into our video element
+    const video = document.getElementById('cameraFeed');
+    video.srcObject = stream;
+
+    // hide the splash screen once camera is ready
+    video.onloadedmetadata = () => {
+      document.getElementById('splash').style.display = 'none';
+    };
+
+  } catch (err) {
+    // if camera permission denied show a message
+    alert('Camera access is required for AR. Please allow camera permission and try again.');
+    console.error('Camera error:', err);
   }
-}
-
-// ════════════════════════════════════════
-// QUEUE OBJECT — gets it ready to place
-// Called when user taps "Queue Object"
-// ════════════════════════════════════════
-function queueObject() {
-  const name = document.getElementById('objName').value.trim() || 'Box';
-  const w    = parseFloat(document.getElementById('objW').value);
-  const d    = parseFloat(document.getElementById('objD').value);
-  const h    = parseFloat(document.getElementById('objH').value);
-
-  if (!w || !d || !h) { alert('Please enter all dimensions (W, D, H)!'); return; }
-
-  // save the object details ready to be placed
-  app.queued = { name, w, d, h, color: app.color };
-
-  // update the tap button text
-  document.getElementById('tapBtn').textContent = `👆 Tap floor to place "${name}"`;
-
-  if (app.surfaceFound) {
-    document.getElementById('tapBtn').style.display = 'block';
-  }
-
-  alert(`"${name}" is ready! Now tap the floor in the AR view to place it.`);
-}
-
-// ════════════════════════════════════════
-// PLACE NEXT OBJECT at reticle position
-// ════════════════════════════════════════
-function placeNextObject() {
-  if (!app.queued || !app.reticlePos) return;
-
-  const obj = app.queued;
-  const id  = app.nextId++;
-  const pos = app.reticlePos;
-
-  // store it in our list
-  app.objects.push({ id, ...obj });
-  app.queued = null;
-
-  // convert cm to meters for A-Frame
-  const aw = obj.w * CM;
-  const ad = obj.d * CM;
-  const ah = obj.h * CM;
-
-  // create the 3D box entity
-  const container = document.getElementById('boxContainer');
-  const parent    = document.createElement('a-entity');
-  parent.id = 'obj-' + id;
-  // place at reticle position, raise by half height so it sits on the surface
-  parent.setAttribute('position', `${pos.x} ${pos.y + ah/2} ${pos.z}`);
-
-  // the actual box
-  const box = document.createElement('a-box');
-  box.id = 'box-' + id;
-  box.setAttribute('width',  aw);
-  box.setAttribute('height', ah);
-  box.setAttribute('depth',  ad);
-  box.setAttribute('material', `color: ${obj.color}; opacity: 0.72; transparent: true`);
-
-  // wireframe on top for that AR look
-  const wire = document.createElement('a-box');
-  wire.id = 'wire-' + id;
-  wire.setAttribute('width',  aw + 0.005);
-  wire.setAttribute('height', ah + 0.005);
-  wire.setAttribute('depth',  ad + 0.005);
-  wire.setAttribute('material', `wireframe: true; color: ${obj.color}`);
-
-  // text label above the box
-  const label = document.createElement('a-text');
-  label.setAttribute('value', `${obj.name}\n${obj.w}x${obj.d}x${obj.h}cm`);
-  label.setAttribute('align', 'center');
-  label.setAttribute('color', '#ffffff');
-  label.setAttribute('scale', '0.15 0.15 0.15');
-  label.setAttribute('position', `0 ${ah/2 + 0.06} 0`);
-  label.setAttribute('look-at', '[camera]');
-
-  parent.appendChild(box);
-  parent.appendChild(wire);
-  parent.appendChild(label);
-  container.appendChild(parent);
-
-  // clear inputs
-  document.getElementById('objName').value = '';
-  document.getElementById('objW').value    = '';
-  document.getElementById('objD').value    = '';
-  document.getElementById('objH').value    = '';
-
-  // hide the tap button
-  document.getElementById('tapBtn').style.display = 'none';
-
-  renderList();
-  updateFit();
 }
 
 // ════════════════════════════════════════
@@ -927,15 +693,117 @@ function applySpace() {
 }
 
 // ════════════════════════════════════════
+// QUEUE OBJECT — gets it ready to place
+// ════════════════════════════════════════
+function queueObject() {
+  const name = document.getElementById('objName').value.trim() || 'Box';
+  const w    = parseFloat(document.getElementById('objW').value);
+  const d    = parseFloat(document.getElementById('objD').value);
+  const h    = parseFloat(document.getElementById('objH').value);
+
+  if (!w || !d || !h) { alert('Please enter all dimensions (W, D, H)!'); return; }
+
+  // save it ready to be placed
+  app.queued = { name, w, d, h, color: app.color };
+
+  // show the crosshair and place button
+  document.getElementById('crosshair').style.display = 'block';
+  document.getElementById('placeBtn').style.display  = 'block';
+  document.getElementById('placeBtn').textContent    = `👆 Tap to place "${name}"`;
+}
+
+// ════════════════════════════════════════
+// PLACE OBJECT — called when user taps place button
+// Places the box at the next available slot position
+// ════════════════════════════════════════
+function placeObject() {
+  if (!app.queued) return;
+
+  const obj = app.queued;
+  const id  = app.nextId++;
+  const idx = app.objects.length % app.slots.length;
+  const pos = app.slots[idx];
+
+  app.objects.push({ id, ...obj });
+  app.queued = null;
+
+  // convert cm to meters
+  const aw = obj.w * CM;
+  const ad = obj.d * CM;
+  const ah = obj.h * CM;
+
+  // create the A-Frame box entity
+  const container = document.getElementById('boxContainer');
+
+  const parent = document.createElement('a-entity');
+  parent.id = 'obj-' + id;
+  // y = half the height so box sits on the ground plane
+  parent.setAttribute('position', `${pos.x} ${pos.y + ah/2} ${pos.z}`);
+
+  // solid box with transparency
+  const box = document.createElement('a-box');
+  box.id = 'box-' + id;
+  box.setAttribute('width',  aw);
+  box.setAttribute('height', ah);
+  box.setAttribute('depth',  ad);
+  box.setAttribute('material', `color: ${obj.color}; opacity: 0.7; transparent: true`);
+
+  // wireframe on top for that AR look
+  const wire = document.createElement('a-box');
+  wire.setAttribute('width',  aw + 0.005);
+  wire.setAttribute('height', ah + 0.005);
+  wire.setAttribute('depth',  ad + 0.005);
+  wire.setAttribute('material', `wireframe: true; color: ${obj.color}`);
+
+  // text label above the box
+  const label = document.createElement('a-text');
+  label.setAttribute('value', `${obj.name}\n${obj.w}x${obj.d}x${obj.h}cm`);
+  label.setAttribute('align', 'center');
+  label.setAttribute('color', 'white');
+  label.setAttribute('scale', '0.2 0.2 0.2');
+  label.setAttribute('position', `0 ${ah/2 + 0.08} 0`);
+  label.setAttribute('look-at', '[camera]');
+
+  parent.appendChild(box);
+  parent.appendChild(wire);
+  parent.appendChild(label);
+  container.appendChild(parent);
+
+  // clear inputs
+  document.getElementById('objName').value = '';
+  document.getElementById('objW').value    = '';
+  document.getElementById('objD').value    = '';
+  document.getElementById('objH').value    = '';
+
+  // hide crosshair and place button
+  document.getElementById('crosshair').style.display = 'none';
+  document.getElementById('placeBtn').style.display  = 'none';
+
+  renderList();
+  updateFit();
+}
+
+// ════════════════════════════════════════
 // SELECT / REMOVE OBJECTS
 // ════════════════════════════════════════
 function selectObj(id) {
   app.selectedId = id;
+  // make selected box pulse
+  app.objects.forEach(o => {
+    const box = document.getElementById('box-' + o.id);
+    if (!box) return;
+    if (o.id === id) {
+      box.setAttribute('animation', 'property: scale; from: 1 1 1; to: 1.08 1.08 1.08; loop: true; dur: 500; dir: alternate');
+    } else {
+      box.removeAttribute('animation');
+      box.setAttribute('scale', '1 1 1');
+    }
+  });
   renderList();
 }
 
 function removeSelected() {
-  if (!app.selectedId) { alert('Select an object from the list first!'); return; }
+  if (!app.selectedId) { alert('Select an object first!'); return; }
   removeById(app.selectedId);
 }
 
@@ -993,7 +861,6 @@ function renderList() {
 
 // ════════════════════════════════════════
 // FIT ANALYSIS
-// Calculates what % of the space is used
 // ════════════════════════════════════════
 function updateFit() {
   const spaceVol = app.space.w * app.space.d * app.space.h;
@@ -1005,9 +872,9 @@ function updateFit() {
     el.className = 'ok'; el.textContent = 'Add objects to start'; return;
   }
 
-  if (pct < 60)      { el.className = 'ok';   el.textContent = `✓ ${pct}% full\nLooks good!`; }
-  else if (pct < 85) { el.className = 'warn'; el.textContent = `⚠ ${pct}% full\nGetting tight`; }
-  else               { el.className = 'bad';  el.textContent = `✗ ${pct}% full\nWon't fit!`; }
+  if (pct < 60)      { el.className = 'ok';   el.textContent = `✓ ${pct}% full — fits!`; }
+  else if (pct < 85) { el.className = 'warn'; el.textContent = `⚠ ${pct}% — tight`; }
+  else               { el.className = 'bad';  el.textContent = `✗ ${pct}% — won't fit!`; }
 }
 </script>
 </body>
