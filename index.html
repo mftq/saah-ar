@@ -6,14 +6,15 @@
   <title>سعة — AR Space Organizer</title>
 
   <!--
-    How this works:
-    1. We use getUserMedia() to open the phone camera as a video element
-    2. That video fills the whole screen as the "AR background"
-    3. A-Frame sits on top with a transparent background to show 3D boxes
-    4. The user taps the screen to place boxes which appear to sit on the real surface
-    This approach works on ALL phones - iPhone and Android - no marker needed!
+    HOW THIS WORKS:
+    - We open the back camera using getUserMedia() — same way AR.js does it
+    - Camera video fills the whole screen as the AR background
+    - We use Three.js (which A-Frame is built on) directly to draw 3D boxes
+    - Three.js canvas sits on top with a transparent background
+    - Result: camera feed shows through, 3D boxes appear on top = AR effect!
+    - No marker needed, works on all phones
   -->
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet" />
 
   <style>
@@ -25,8 +26,8 @@
       --green:  #4ade80;
       --red:    #f87171;
       --yellow: #facc15;
-      --bg:     rgba(8, 12, 24, 0.88);
-      --border: rgba(74, 158, 255, 0.2);
+      --bg:     rgba(8, 12, 24, 0.9);
+      --border: rgba(74,158,255,0.2);
       --text:   #E8F0FF;
       --muted:  #4A6080;
     }
@@ -36,49 +37,40 @@
       background: #000;
       color: var(--text);
       overflow: hidden;
-      height: 100vh;
-      width: 100vw;
+      height: 100vh; width: 100vw;
     }
 
-    /* ── camera video fills the whole screen as AR background ── */
-    #cameraFeed {
+    /* camera video fills entire screen */
+    #cam {
       position: fixed;
       top: 0; left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover; /* fills screen without stretching */
-      z-index: 0;        /* sits behind everything */
+      width: 100vw; height: 100vh;
+      object-fit: cover;
+      z-index: 0;
     }
 
-    /* ── A-Frame scene sits on top of the camera feed ── */
-    /* background is transparent so camera shows through */
-    a-scene {
-      position: fixed !important;
+    /* Three.js canvas sits on top, transparent background */
+    #threeCanvas {
+      position: fixed;
       top: 0; left: 0;
-      width: 100% !important;
-      height: 100% !important;
+      width: 100vw; height: 100vh;
       z-index: 1;
-      background: transparent !important;
+      pointer-events: none; /* touches go to UI, not canvas */
     }
 
-    /* make the A-Frame canvas transparent */
-    canvas {
-      background: transparent !important;
-    }
-
-    /* ── UI sits on top of everything ── */
+    /* UI on top of everything */
     #ui {
       position: fixed;
       top: 0; left: 0;
       width: 100%; height: 100%;
       z-index: 10;
-      pointer-events: none; /* clicks pass through to AR by default */
+      pointer-events: none;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
 
-    /* ── splash screen ── */
+    /* splash */
     #splash {
       position: fixed;
       inset: 0;
@@ -88,136 +80,98 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 20px;
-      padding: 32px;
+      gap: 18px;
+      padding: 28px;
       text-align: center;
     }
 
-    .splash-logo {
+    .logo-big {
       font-family: 'Space Mono', monospace;
-      font-size: 52px;
-      font-weight: 700;
+      font-size: 56px;
       color: var(--blue);
       line-height: 1;
     }
-    .splash-logo span { color: var(--orange); }
+    .logo-big span { color: var(--orange); }
 
-    .splash-tagline {
-      font-size: 15px;
-      color: var(--muted);
-      max-width: 280px;
-      line-height: 1.6;
-    }
+    .tagline { font-size: 14px; color: var(--muted); max-width: 270px; line-height: 1.6; }
 
-    .splash-steps {
+    .steps {
       background: rgba(74,158,255,0.05);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 18px;
+      border-radius: 14px;
+      padding: 16px 18px;
       text-align: left;
-      width: 100%;
-      max-width: 320px;
+      width: 100%; max-width: 310px;
     }
 
-    .splash-steps h3 {
+    .steps h3 {
       font-family: 'Space Mono', monospace;
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 12px;
+      font-size: 9px; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 10px;
     }
 
     .step {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 10px;
-      font-size: 13px;
-      color: var(--text);
-      line-height: 1.4;
+      display: flex; align-items: flex-start;
+      gap: 10px; margin-bottom: 8px;
+      font-size: 13px; line-height: 1.4;
     }
 
-    .step-num {
-      width: 22px; height: 22px;
+    .sn {
+      width: 20px; height: 20px;
       border-radius: 50%;
       background: rgba(74,158,255,0.15);
       border: 1px solid var(--blue);
       color: var(--blue);
       font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      font-size: 10px;
+      display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
 
     .btn-start {
-      width: 100%;
-      max-width: 320px;
-      background: var(--blue);
-      color: white;
-      border: none;
-      border-radius: 14px;
-      padding: 16px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 16px;
-      font-weight: 600;
+      width: 100%; max-width: 310px;
+      background: var(--blue); color: white;
+      border: none; border-radius: 13px;
+      padding: 15px; font-family: 'DM Sans', sans-serif;
+      font-size: 16px; font-weight: 600;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
     }
-    .btn-start:active { transform: scale(0.97); }
 
-    /* ── top bar ── */
+    /* topbar */
     .topbar {
       pointer-events: all;
-      display: flex;
-      align-items: center;
+      display: flex; align-items: center;
       justify-content: space-between;
-      padding: 14px 18px;
+      padding: 13px 16px;
       background: var(--bg);
       backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border);
     }
 
-    .logo {
-      font-family: 'Space Mono', monospace;
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--blue);
-    }
+    .logo { font-family: 'Space Mono', monospace; font-size: 17px; color: var(--blue); }
     .logo em { color: var(--orange); font-style: normal; }
 
     #capBadge {
-      font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      padding: 5px 12px;
-      border-radius: 100px;
+      font-family: 'Space Mono', monospace; font-size: 11px;
+      padding: 5px 11px; border-radius: 100px;
       background: rgba(74,158,255,0.1);
-      border: 1px solid var(--border);
-      color: var(--blue);
+      border: 1px solid var(--border); color: var(--blue);
     }
 
-    /* ── place button in the middle of screen ── */
+    /* place button */
     #placeBtn {
       pointer-events: all;
-      position: fixed;
-      bottom: 220px;
-      left: 50%;
+      position: fixed; bottom: 215px; left: 50%;
       transform: translateX(-50%);
-      background: var(--blue);
-      color: white;
-      border: none;
-      border-radius: 100px;
-      padding: 14px 28px;
+      background: var(--blue); color: white;
+      border: none; border-radius: 100px;
+      padding: 13px 26px;
       font-family: 'DM Sans', sans-serif;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      display: none; /* shown only when object is queued */
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; display: none;
       white-space: nowrap;
       animation: glow 2s ease-in-out infinite;
-      box-shadow: 0 0 30px rgba(74,158,255,0.5);
     }
 
     @keyframes glow {
@@ -225,215 +179,99 @@
       50%      { box-shadow: 0 0 50px rgba(74,158,255,0.9); }
     }
 
-    /* crosshair in the center of screen for aiming */
-    #crosshair {
-      pointer-events: none;
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      display: none; /* shown when object is queued */
-    }
-
-    .crosshair-ring {
-      width: 60px; height: 60px;
-      border: 2px solid rgba(74,158,255,0.8);
-      border-radius: 50%;
-      position: relative;
-      animation: pulse-ring 1.5s ease-in-out infinite;
-    }
-
-    @keyframes pulse-ring {
-      0%,100% { transform: scale(1); opacity: 1; }
-      50%      { transform: scale(1.2); opacity: 0.5; }
-    }
-
-    .crosshair-ring::before, .crosshair-ring::after {
-      content: '';
-      position: absolute;
-      background: var(--blue);
-    }
-    .crosshair-ring::before { width: 1px; height: 20px; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-    .crosshair-ring::after  { width: 20px; height: 1px; top: 50%; left: 50%; transform: translate(-50%,-50%); }
-
-    /* ── fit panel ── */
+    /* fit panel */
     #fitPanel {
       pointer-events: none;
-      position: fixed;
-      top: 76px; right: 12px;
-      background: var(--bg);
-      backdrop-filter: blur(10px);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 14px;
+      position: fixed; top: 73px; right: 10px;
+      background: var(--bg); backdrop-filter: blur(10px);
+      border: 1px solid var(--border); border-radius: 11px;
+      padding: 9px 13px;
       font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      min-width: 145px;
-      line-height: 1.7;
+      font-size: 11px; min-width: 138px; line-height: 1.7;
     }
-
-    #fitPanel h4 {
-      font-size: 9px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 5px;
-    }
-
+    #fitPanel h4 { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
     .ok   { color: var(--green); }
     .warn { color: var(--yellow); }
     .bad  { color: var(--red); }
 
-    /* ── bottom panel ── */
-    #bottomPanel {
+    /* bottom panel */
+    #btm {
       pointer-events: all;
       background: var(--bg);
       backdrop-filter: blur(20px);
       border-top: 1px solid var(--border);
     }
 
-    .tabs {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-    }
-
+    .tabs { display: flex; border-bottom: 1px solid var(--border); }
     .tab {
-      flex: 1;
-      background: transparent;
-      border: none;
+      flex: 1; background: transparent; border: none;
       border-bottom: 2px solid transparent;
-      color: var(--muted);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      padding: 11px 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: center;
+      color: var(--muted); font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 500;
+      padding: 10px 6px; cursor: pointer;
+      transition: all 0.2s; text-align: center;
     }
     .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
 
-    .tab-pane { display: none; padding: 14px 16px; }
-    .tab-pane.active { display: block; }
+    .tp { display: none; padding: 13px 14px; }
+    .tp.active { display: block; }
 
-    .form-grid {
+    .fg {
       display: grid;
       grid-template-columns: 2fr 1fr 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 10px;
+      gap: 7px; margin-bottom: 9px;
     }
 
     .field label {
-      display: block;
-      font-size: 10px;
-      color: var(--muted);
+      display: block; font-size: 10px; color: var(--muted);
       font-family: 'Space Mono', monospace;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px;
     }
 
     .field input {
-      width: 100%;
-      background: rgba(10,14,26,0.9);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 9px 10px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
+      width: 100%; background: rgba(10,14,26,0.9);
+      border: 1px solid var(--border); color: var(--text);
+      border-radius: 7px; padding: 8px 9px;
+      font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
     }
     .field input:focus { border-color: var(--blue); }
 
-    .swatches {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-    .swatches label {
-      font-size: 10px;
-      color: var(--muted);
-      font-family: 'Space Mono', monospace;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .swatch {
-      width: 24px; height: 24px;
-      border-radius: 50%;
-      cursor: pointer;
-      border: 2px solid transparent;
+    .sw { display: flex; align-items: center; gap: 7px; margin-bottom: 11px; flex-wrap: wrap; }
+    .sw label { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; }
+    .dot {
+      width: 23px; height: 23px; border-radius: 50%;
+      cursor: pointer; border: 2px solid transparent;
       transition: transform 0.15s, border-color 0.15s;
       display: inline-block;
     }
-    .swatch:hover { transform: scale(1.2); }
-    .swatch.sel   { border-color: white; transform: scale(1.2); }
+    .dot:hover { transform: scale(1.2); }
+    .dot.sel { border-color: white; transform: scale(1.2); }
 
-    .btn {
-      border: none;
-      border-radius: 10px;
-      padding: 11px 14px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
-    }
-    .btn:active { transform: scale(0.97); }
-    .btn:hover  { opacity: 0.88; }
-    .btn-full   { width: 100%; }
-    .btn-blue   { background: var(--blue);   color: white; }
-    .btn-orange { background: var(--orange); color: white; }
-    .btn-ghost  { background: transparent; border: 1px solid var(--border); color: var(--muted); }
-    .btn-danger { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
+    .btn { border: none; border-radius: 9px; padding: 10px 13px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.88; }
+    .bf { width: 100%; }
+    .bb { background: var(--blue); color: white; }
+    .bo { background: var(--orange); color: white; }
+    .bg { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .bd { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
 
-    #objList {
-      max-height: 120px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 10px;
-    }
-
-    .obj-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    #ol { max-height: 115px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; }
+    .oc {
+      display: flex; align-items: center; gap: 9px;
       background: rgba(74,158,255,0.04);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 12px;
-      cursor: pointer;
-      transition: all 0.2s;
+      border: 1px solid var(--border); border-radius: 7px;
+      padding: 7px 10px; cursor: pointer; transition: all 0.2s;
     }
-    .obj-card:hover  { border-color: rgba(74,158,255,0.4); }
-    .obj-card.active { border-color: var(--blue); background: rgba(74,158,255,0.08); }
-
-    .obj-dot  { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-    .obj-info { flex: 1; min-width: 0; }
-    .obj-name { font-size: 13px; font-weight: 500; }
-    .obj-dim  { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
-
-    .obj-del {
-      background: none; border: none;
-      color: var(--muted); cursor: pointer;
-      font-size: 16px; padding: 2px 6px;
-      border-radius: 4px; transition: color 0.2s;
-    }
-    .obj-del:hover { color: var(--red); }
-
-    .btn-row { display: flex; gap: 8px; }
-
-    .empty {
-      text-align: center;
-      color: var(--muted);
-      font-size: 12px;
-      padding: 12px 0;
-      font-family: 'Space Mono', monospace;
-    }
+    .oc:hover { border-color: rgba(74,158,255,0.4); }
+    .oc.active { border-color: var(--blue); background: rgba(74,158,255,0.08); }
+    .od { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+    .oi { flex: 1; min-width: 0; }
+    .on { font-size: 13px; font-weight: 500; }
+    .odim { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
+    .ox { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 2px 5px; border-radius: 3px; }
+    .ox:hover { color: var(--red); }
+    .br { display: flex; gap: 7px; }
+    .em { text-align: center; color: var(--muted); font-size: 12px; padding: 11px 0; font-family: 'Space Mono', monospace; }
 
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -441,440 +279,355 @@
 </head>
 <body>
 
-<!-- camera video element - fills screen as AR background -->
-<video id="cameraFeed" autoplay playsinline muted></video>
+<!-- camera feed background -->
+<video id="cam" autoplay playsinline muted></video>
 
-<!-- A-Frame scene - transparent so camera shows through -->
-<a-scene
-  background="color: transparent"
-  renderer="alpha: true; antialias: true;"
-  vr-mode-ui="enabled: false"
-  embedded
->
-  <!-- all user boxes go here -->
-  <a-entity id="boxContainer"></a-entity>
-
-  <!-- camera positioned so objects appear in front of user -->
-  <a-camera
-    position="0 1.6 0"
-    look-controls="enabled: false"
-    wasd-controls="enabled: false"
-  ></a-camera>
-</a-scene>
-
+<!-- Three.js canvas (transparent, boxes drawn here) -->
+<canvas id="threeCanvas"></canvas>
 
 <!-- splash screen -->
 <div id="splash">
-  <div class="splash-logo">سعة <span>·</span></div>
-  <div style="font-family:'Space Mono',monospace;font-size:13px;color:var(--blue);letter-spacing:1px">AR SPACE ORGANIZER</div>
-  <div class="splash-tagline">Visualize your items in real AR before you pack. No more guessing if it fits.</div>
+  <div class="logo-big">سعة <span>·</span></div>
+  <div style="font-family:'Space Mono',monospace;font-size:12px;color:var(--blue);letter-spacing:2px">AR SPACE ORGANIZER</div>
+  <div class="tagline">Place virtual boxes in real space. See exactly what fits before you pack.</div>
 
-  <div class="splash-steps">
-    <h3>How it works</h3>
-    <div class="step">
-      <div class="step-num">1</div>
-      <div>Tap <strong>Start</strong> and allow camera access</div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div>Enter your object name and dimensions</div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div>Tap <strong>Place Object</strong> — aim at the surface and tap</div>
-    </div>
-    <div class="step">
-      <div class="step-num">4</div>
-      <div>See your objects in AR and check if they fit!</div>
-    </div>
+  <div class="steps">
+    <h3>How to use</h3>
+    <div class="step"><div class="sn">1</div><div>Tap <strong>Start</strong> and allow camera</div></div>
+    <div class="step"><div class="sn">2</div><div>Enter your object name and size (W×D×H)</div></div>
+    <div class="step"><div class="sn">3</div><div>Tap <strong>Place Object</strong> to add it to AR</div></div>
+    <div class="step"><div class="sn">4</div><div>Check the fit analysis to see if everything fits!</div></div>
   </div>
 
-  <button class="btn-start" onclick="startApp()">Start AR →</button>
+  <button class="btn-start" onclick="startApp()">Start AR Experience →</button>
 </div>
-
 
 <!-- UI overlay -->
 <div id="ui">
-
-  <!-- top bar -->
   <div class="topbar">
     <div class="logo">سعة <em>·</em> Sa'ah</div>
     <div id="capBadge">0 objects</div>
     <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-align:right">AR Space<br/>Organizer</div>
   </div>
 
-  <!-- crosshair shown when placing -->
-  <div id="crosshair">
-    <div class="crosshair-ring"></div>
-  </div>
+  <button id="placeBtn" onclick="placeQueued()">👆 Tap to place object</button>
 
-  <!-- place button shown when object is queued -->
-  <button id="placeBtn" onclick="placeObject()">👆 Tap here to place</button>
-
-  <!-- fit panel -->
   <div id="fitPanel">
     <h4>Fit Analysis</h4>
-    <div id="fitStatus" class="ok">Add objects to start</div>
+    <div id="fs" class="ok">Add objects to start</div>
   </div>
 
-  <!-- bottom panel -->
-  <div id="bottomPanel">
+  <div id="btm">
     <div class="tabs">
-      <button class="tab active" onclick="showTab('add',this)">➕ Add</button>
-      <button class="tab"        onclick="showTab('list',this)">📦 Objects</button>
-      <button class="tab"        onclick="showTab('space',this)">📐 Space</button>
+      <button class="tab active" onclick="st('add',this)">➕ Add</button>
+      <button class="tab"        onclick="st('list',this)">📦 Objects</button>
+      <button class="tab"        onclick="st('space',this)">📐 Space</button>
     </div>
 
-    <!-- ADD TAB -->
-    <div class="tab-pane active" id="tab-add">
-      <div class="form-grid">
-        <div class="field">
-          <label>Name</label>
-          <input type="text" id="objName" placeholder="Clothes Box" />
-        </div>
-        <div class="field">
-          <label>W cm</label>
-          <input type="number" id="objW" placeholder="50" min="5" />
-        </div>
-        <div class="field">
-          <label>D cm</label>
-          <input type="number" id="objD" placeholder="40" min="5" />
-        </div>
-        <div class="field">
-          <label>H cm</label>
-          <input type="number" id="objH" placeholder="30" min="5" />
-        </div>
+    <!-- ADD -->
+    <div class="tp active" id="tab-add">
+      <div class="fg">
+        <div class="field"><label>Name</label><input type="text" id="oN" placeholder="Clothes Box" /></div>
+        <div class="field"><label>W cm</label><input type="number" id="oW" placeholder="50" min="5" /></div>
+        <div class="field"><label>D cm</label><input type="number" id="oD" placeholder="40" min="5" /></div>
+        <div class="field"><label>H cm</label><input type="number" id="oH" placeholder="30" min="5" /></div>
       </div>
-      <div class="swatches">
-        <label>Color</label>
-        <div id="swatchRow"></div>
-      </div>
-      <button class="btn btn-blue btn-full" onclick="queueObject()">Place Object in AR →</button>
+      <div class="sw"><label>Color</label><div id="sr"></div></div>
+      <button class="btn bb bf" onclick="queueObj()">Place Object in AR →</button>
     </div>
 
-    <!-- LIST TAB -->
-    <div class="tab-pane" id="tab-list">
-      <div id="objList">
-        <div class="empty">No objects placed yet!</div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-ghost"  style="flex:1;font-size:12px" onclick="removeSelected()">✕ Remove</button>
-        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="clearAll()">🗑 Clear All</button>
+    <!-- LIST -->
+    <div class="tp" id="tab-list">
+      <div id="ol"><div class="em">No objects yet!</div></div>
+      <div class="br">
+        <button class="btn bg" style="flex:1;font-size:12px" onclick="rmSel()">✕ Remove</button>
+        <button class="btn bd" style="flex:1;font-size:12px" onclick="clrAll()">🗑 Clear All</button>
       </div>
     </div>
 
-    <!-- SPACE TAB -->
-    <div class="tab-pane" id="tab-space">
-      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;font-family:'Space Mono',monospace">
-        Set the real dimensions of your space:
-      </p>
-      <div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(120,100,80)">🚗 Car</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(35,20,45)">🎒 Bag</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(50,25,70)">🧳 Case</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(90,40,200)">📦 Shelf</button>
+    <!-- SPACE -->
+    <div class="tp" id="tab-space">
+      <p style="font-size:11px;color:var(--muted);margin-bottom:9px;font-family:'Space Mono',monospace">Real dimensions of your space:</p>
+      <div class="br" style="margin-bottom:9px;flex-wrap:wrap;gap:5px">
+        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(120,100,80)">🚗 Car</button>
+        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(35,20,45)">🎒 Bag</button>
+        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(50,25,70)">🧳 Case</button>
+        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(90,40,200)">📦 Shelf</button>
       </div>
-      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
-        <div class="field"><label>W cm</label><input type="number" id="spaceW" value="120" /></div>
-        <div class="field"><label>D cm</label><input type="number" id="spaceD" value="100" /></div>
-        <div class="field"><label>H cm</label><input type="number" id="spaceH" value="80"  /></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:9px">
+        <div class="field"><label>W cm</label><input type="number" id="sW" value="120" /></div>
+        <div class="field"><label>D cm</label><input type="number" id="sD" value="100" /></div>
+        <div class="field"><label>H cm</label><input type="number" id="sH" value="80"  /></div>
       </div>
-      <button class="btn btn-orange btn-full" onclick="applySpace()">Apply Space Size</button>
+      <button class="btn bo bf" onclick="apSp()">Apply Space Size</button>
     </div>
   </div>
 </div>
 
-
 <script>
-// ════════════════════════════════════════
-// APP STATE
-// ════════════════════════════════════════
-const app = {
+// ════════════════════════════════
+// STATE
+// ════════════════════════════════
+const S = {
   objects:    [],
-  selectedId: null,
+  selId:      null,
   nextId:     1,
   color:      '#4A9EFF',
-  queued:     null,        // object waiting to be placed
+  queued:     null,
   space:      { w:120, d:100, h:80 },
   colors:     ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
-
-  // pre-set positions in 3D space where boxes appear
-  // x = left/right, y = height, z = depth (negative = further away)
-  slots: [
-    { x:-0.4, y:0,   z:-1.5 },
-    { x: 0,   y:0,   z:-1.5 },
-    { x: 0.4, y:0,   z:-1.5 },
-    { x:-0.4, y:0,   z:-2   },
-    { x: 0,   y:0,   z:-2   },
-    { x: 0.4, y:0,   z:-2   },
-    { x:-0.4, y:0,   z:-2.5 },
-    { x: 0,   y:0,   z:-2.5 },
-    { x: 0.4, y:0,   z:-2.5 },
-  ],
 };
 
-// 1 cm in A-Frame units (A-Frame uses meters, so 1cm = 0.01m)
+// 3D box layout positions
+// x=left/right, y=up, z=depth (negative=in front of camera)
+const SLOTS = [
+  [-0.5, 0, -2], [0, 0, -2], [0.5, 0, -2],
+  [-0.5, 0, -2.6], [0, 0, -2.6], [0.5, 0, -2.6],
+  [-0.5, 0, -3.2], [0, 0, -3.2], [0.5, 0, -3.2],
+];
+
+// cm to meters
 const CM = 0.01;
 
-// ════════════════════════════════════════
-// START APP — open camera and show UI
-// ════════════════════════════════════════
+// ════════════════════════════════
+// THREE.JS SETUP
+// ════════════════════════════════
+const canvas   = document.getElementById('threeCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x000000, 0); // fully transparent background!
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(0, 1.6, 0); // eye level height
+
+// basic lighting so boxes look 3D
+const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+dirLight.position.set(1, 3, 2);
+scene.add(dirLight);
+
+// resize handler
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// animation loop - renders Three.js scene every frame
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+animate();
+
+// ════════════════════════════════
+// START APP — open camera
+// ════════════════════════════════
 async function startApp() {
   try {
-    // ask for camera permission and open the back camera
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' }, // back camera
-        width:  { ideal: 1920 },
-        height: { ideal: 1080 },
-      }
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
     });
 
-    // plug the camera stream into our video element
-    const video = document.getElementById('cameraFeed');
-    video.srcObject = stream;
+    const vid = document.getElementById('cam');
+    vid.srcObject = stream;
 
-    // hide the splash screen once camera is ready
-    video.onloadedmetadata = () => {
+    vid.onloadedmetadata = () => {
+      // hide splash once camera is ready
       document.getElementById('splash').style.display = 'none';
     };
 
-  } catch (err) {
-    // if camera permission denied show a message
-    alert('Camera access is required for AR. Please allow camera permission and try again.');
-    console.error('Camera error:', err);
+  } catch (e) {
+    alert('Camera permission is required! Please allow camera and try again.');
   }
 }
 
-// ════════════════════════════════════════
+// ════════════════════════════════
 // COLOR SWATCHES
-// ════════════════════════════════════════
+// ════════════════════════════════
 function buildSwatches() {
-  const row = document.getElementById('swatchRow');
-  app.colors.forEach(c => {
-    const s = document.createElement('div');
-    s.className = 'swatch' + (c === app.color ? ' sel' : '');
-    s.style.background = c;
-    s.onclick = () => {
-      document.querySelectorAll('.swatch').forEach(x => x.classList.remove('sel'));
-      s.classList.add('sel');
-      app.color = c;
+  const row = document.getElementById('sr');
+  S.colors.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (c === S.color ? ' sel' : '');
+    d.style.background = c;
+    d.onclick = () => {
+      document.querySelectorAll('.dot').forEach(x => x.classList.remove('sel'));
+      d.classList.add('sel');
+      S.color = c;
     };
-    row.appendChild(s);
+    row.appendChild(d);
   });
 }
 buildSwatches();
 
-// ════════════════════════════════════════
+// ════════════════════════════════
 // TABS
-// ════════════════════════════════════════
-function showTab(name, btn) {
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+// ════════════════════════════════
+function st(name, btn) {
+  document.querySelectorAll('.tp').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
 }
 
-// ════════════════════════════════════════
+// ════════════════════════════════
 // SPACE PRESETS
-// ════════════════════════════════════════
-function setPreset(w, d, h) {
-  document.getElementById('spaceW').value = w;
-  document.getElementById('spaceD').value = d;
-  document.getElementById('spaceH').value = h;
-  applySpace();
+// ════════════════════════════════
+function sp(w, d, h) {
+  document.getElementById('sW').value = w;
+  document.getElementById('sD').value = d;
+  document.getElementById('sH').value = h;
+  apSp();
 }
 
-function applySpace() {
-  app.space.w = +document.getElementById('spaceW').value || 120;
-  app.space.d = +document.getElementById('spaceD').value || 100;
-  app.space.h = +document.getElementById('spaceH').value || 80;
-  updateFit();
+function apSp() {
+  S.space.w = +document.getElementById('sW').value || 120;
+  S.space.d = +document.getElementById('sD').value || 100;
+  S.space.h = +document.getElementById('sH').value || 80;
+  updFit();
 }
 
-// ════════════════════════════════════════
-// QUEUE OBJECT — gets it ready to place
-// ════════════════════════════════════════
-function queueObject() {
-  const name = document.getElementById('objName').value.trim() || 'Box';
-  const w    = parseFloat(document.getElementById('objW').value);
-  const d    = parseFloat(document.getElementById('objD').value);
-  const h    = parseFloat(document.getElementById('objH').value);
+// ════════════════════════════════
+// QUEUE OBJECT — ready to place
+// ════════════════════════════════
+function queueObj() {
+  const name = document.getElementById('oN').value.trim() || 'Box';
+  const w    = parseFloat(document.getElementById('oW').value);
+  const d    = parseFloat(document.getElementById('oD').value);
+  const h    = parseFloat(document.getElementById('oH').value);
 
-  if (!w || !d || !h) { alert('Please enter all dimensions (W, D, H)!'); return; }
+  if (!w || !d || !h) { alert('Please enter W, D and H dimensions!'); return; }
 
-  // save it ready to be placed
-  app.queued = { name, w, d, h, color: app.color };
-
-  // show the crosshair and place button
-  document.getElementById('crosshair').style.display = 'block';
-  document.getElementById('placeBtn').style.display  = 'block';
-  document.getElementById('placeBtn').textContent    = `👆 Tap to place "${name}"`;
+  S.queued = { name, w, d, h, color: S.color };
+  document.getElementById('placeBtn').style.display = 'block';
+  document.getElementById('placeBtn').textContent   = `👆 Tap to place "${name}"`;
 }
 
-// ════════════════════════════════════════
-// PLACE OBJECT — called when user taps place button
-// Places the box at the next available slot position
-// ════════════════════════════════════════
-function placeObject() {
-  if (!app.queued) return;
+// ════════════════════════════════
+// PLACE QUEUED OBJECT in 3D scene
+// ════════════════════════════════
+function placeQueued() {
+  if (!S.queued) return;
 
-  const obj = app.queued;
-  const id  = app.nextId++;
-  const idx = app.objects.length % app.slots.length;
-  const pos = app.slots[idx];
+  const obj  = S.queued;
+  const id   = S.nextId++;
+  const idx  = S.objects.length % SLOTS.length;
+  const slot = SLOTS[idx];
 
-  app.objects.push({ id, ...obj });
-  app.queued = null;
+  S.objects.push({ id, ...obj });
+  S.queued = null;
 
   // convert cm to meters
   const aw = obj.w * CM;
   const ad = obj.d * CM;
   const ah = obj.h * CM;
 
-  // create the A-Frame box entity
-  const container = document.getElementById('boxContainer');
+  // create the 3D box in Three.js
+  const geo  = new THREE.BoxGeometry(aw, ah, ad);
+  const col  = new THREE.Color(obj.color);
 
-  const parent = document.createElement('a-entity');
-  parent.id = 'obj-' + id;
-  // y = half the height so box sits on the ground plane
-  parent.setAttribute('position', `${pos.x} ${pos.y + ah/2} ${pos.z}`);
+  // solid transparent box
+  const mat  = new THREE.MeshPhongMaterial({ color: col, transparent: true, opacity: 0.72 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name  = 'box-' + id;
 
-  // solid box with transparency
-  const box = document.createElement('a-box');
-  box.id = 'box-' + id;
-  box.setAttribute('width',  aw);
-  box.setAttribute('height', ah);
-  box.setAttribute('depth',  ad);
-  box.setAttribute('material', `color: ${obj.color}; opacity: 0.7; transparent: true`);
+  // wireframe on top for AR look
+  const wmat = new THREE.MeshBasicMaterial({ color: col, wireframe: true });
+  const wire = new THREE.Mesh(geo, wmat);
 
-  // wireframe on top for that AR look
-  const wire = document.createElement('a-box');
-  wire.setAttribute('width',  aw + 0.005);
-  wire.setAttribute('height', ah + 0.005);
-  wire.setAttribute('depth',  ad + 0.005);
-  wire.setAttribute('material', `wireframe: true; color: ${obj.color}`);
-
-  // text label above the box
-  const label = document.createElement('a-text');
-  label.setAttribute('value', `${obj.name}\n${obj.w}x${obj.d}x${obj.h}cm`);
-  label.setAttribute('align', 'center');
-  label.setAttribute('color', 'white');
-  label.setAttribute('scale', '0.2 0.2 0.2');
-  label.setAttribute('position', `0 ${ah/2 + 0.08} 0`);
-  label.setAttribute('look-at', '[camera]');
-
-  parent.appendChild(box);
-  parent.appendChild(wire);
-  parent.appendChild(label);
-  container.appendChild(parent);
+  // group them together
+  const group = new THREE.Group();
+  group.name  = 'obj-' + id;
+  group.position.set(slot[0], slot[1] + ah / 2, slot[2]);
+  group.add(mesh);
+  group.add(wire);
+  scene.add(group);
 
   // clear inputs
-  document.getElementById('objName').value = '';
-  document.getElementById('objW').value    = '';
-  document.getElementById('objD').value    = '';
-  document.getElementById('objH').value    = '';
+  document.getElementById('oN').value = '';
+  document.getElementById('oW').value = '';
+  document.getElementById('oD').value = '';
+  document.getElementById('oH').value = '';
 
-  // hide crosshair and place button
-  document.getElementById('crosshair').style.display = 'none';
-  document.getElementById('placeBtn').style.display  = 'none';
+  document.getElementById('placeBtn').style.display = 'none';
 
   renderList();
-  updateFit();
+  updFit();
 }
 
-// ════════════════════════════════════════
-// SELECT / REMOVE OBJECTS
-// ════════════════════════════════════════
-function selectObj(id) {
-  app.selectedId = id;
-  // make selected box pulse
-  app.objects.forEach(o => {
-    const box = document.getElementById('box-' + o.id);
-    if (!box) return;
-    if (o.id === id) {
-      box.setAttribute('animation', 'property: scale; from: 1 1 1; to: 1.08 1.08 1.08; loop: true; dur: 500; dir: alternate');
-    } else {
-      box.removeAttribute('animation');
-      box.setAttribute('scale', '1 1 1');
-    }
-  });
+// ════════════════════════════════
+// SELECT / REMOVE
+// ════════════════════════════════
+function selObj(id) {
+  S.selId = id;
   renderList();
 }
 
-function removeSelected() {
-  if (!app.selectedId) { alert('Select an object first!'); return; }
-  removeById(app.selectedId);
+function rmSel() {
+  if (!S.selId) { alert('Select an object first!'); return; }
+  rmById(S.selId);
 }
 
-function removeById(id) {
-  const el = document.getElementById('obj-' + id);
-  if (el) el.parentNode.removeChild(el);
-  app.objects    = app.objects.filter(o => o.id !== id);
-  if (app.selectedId === id) app.selectedId = null;
+function rmById(id) {
+  const g = scene.getObjectByName('obj-' + id);
+  if (g) scene.remove(g);
+  S.objects = S.objects.filter(o => o.id !== id);
+  if (S.selId === id) S.selId = null;
   renderList();
-  updateFit();
+  updFit();
 }
 
-function clearAll() {
-  if (!app.objects.length) return;
+function clrAll() {
+  if (!S.objects.length) return;
   if (!confirm('Remove all objects?')) return;
-  app.objects.forEach(o => {
-    const el = document.getElementById('obj-' + o.id);
-    if (el) el.parentNode.removeChild(el);
-  });
-  app.objects    = [];
-  app.selectedId = null;
-  renderList();
-  updateFit();
+  S.objects.forEach(o => { const g = scene.getObjectByName('obj-' + o.id); if (g) scene.remove(g); });
+  S.objects = []; S.selId = null;
+  renderList(); updFit();
 }
 
-// ════════════════════════════════════════
-// RENDER OBJECT LIST
-// ════════════════════════════════════════
+// ════════════════════════════════
+// RENDER LIST
+// ════════════════════════════════
 function renderList() {
-  const list = document.getElementById('objList');
-  document.getElementById('capBadge').textContent =
-    app.objects.length + ' object' + (app.objects.length !== 1 ? 's' : '');
+  const list = document.getElementById('ol');
+  document.getElementById('capBadge').textContent = S.objects.length + ' object' + (S.objects.length !== 1 ? 's' : '');
 
-  if (!app.objects.length) {
-    list.innerHTML = '<div class="empty">No objects placed yet!</div>';
-    return;
-  }
+  if (!S.objects.length) { list.innerHTML = '<div class="em">No objects placed yet!</div>'; return; }
 
   list.innerHTML = '';
-  app.objects.forEach(o => {
-    const card = document.createElement('div');
-    card.className = 'obj-card' + (o.id === app.selectedId ? ' active' : '');
-    card.innerHTML = `
-      <div class="obj-dot" style="background:${o.color}"></div>
-      <div class="obj-info">
-        <div class="obj-name">${o.name}</div>
-        <div class="obj-dim">${o.w}×${o.d}×${o.h} cm</div>
+  S.objects.forEach(o => {
+    const c = document.createElement('div');
+    c.className = 'oc' + (o.id === S.selId ? ' active' : '');
+    c.innerHTML = `
+      <div class="od" style="background:${o.color}"></div>
+      <div class="oi">
+        <div class="on">${o.name}</div>
+        <div class="odim">${o.w}×${o.d}×${o.h} cm</div>
       </div>
-      <button class="obj-del" onclick="removeById(${o.id});event.stopPropagation()">×</button>
+      <button class="ox" onclick="rmById(${o.id});event.stopPropagation()">×</button>
     `;
-    card.onclick = () => selectObj(o.id);
-    list.appendChild(card);
+    c.onclick = () => selObj(o.id);
+    list.appendChild(c);
   });
 }
 
-// ════════════════════════════════════════
+// ════════════════════════════════
 // FIT ANALYSIS
-// ════════════════════════════════════════
-function updateFit() {
-  const spaceVol = app.space.w * app.space.d * app.space.h;
-  const usedVol  = app.objects.reduce((sum, o) => sum + o.w * o.d * o.h, 0);
-  const pct      = Math.min(100, Math.round((usedVol / spaceVol) * 100));
-  const el       = document.getElementById('fitStatus');
+// ════════════════════════════════
+function updFit() {
+  const sv  = S.space.w * S.space.d * S.space.h;
+  const uv  = S.objects.reduce((s, o) => s + o.w * o.d * o.h, 0);
+  const pct = Math.min(100, Math.round((uv / sv) * 100));
+  const el  = document.getElementById('fs');
 
-  if (!app.objects.length) {
-    el.className = 'ok'; el.textContent = 'Add objects to start'; return;
-  }
-
-  if (pct < 60)      { el.className = 'ok';   el.textContent = `✓ ${pct}% full — fits!`; }
-  else if (pct < 85) { el.className = 'warn'; el.textContent = `⚠ ${pct}% — tight`; }
-  else               { el.className = 'bad';  el.textContent = `✗ ${pct}% — won't fit!`; }
+  if (!S.objects.length) { el.className = 'ok'; el.textContent = 'Add objects to start'; return; }
+  if (pct < 60)          { el.className = 'ok';   el.textContent = `✓ ${pct}% full — fits!`; }
+  else if (pct < 85)     { el.className = 'warn'; el.textContent = `⚠ ${pct}% — getting tight`; }
+  else                   { el.className = 'bad';  el.textContent = `✗ ${pct}% — won't fit!`; }
 }
 </script>
 </body>
