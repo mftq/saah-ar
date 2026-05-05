@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+  <title>سعة — AR Space Organizer</title>
+
+  <!--
+    MindAR: a free library that lets us do markerless AR in the browser.
+    It works on both iPhone and Android without needing a printed marker.
+    We pair it with A-Frame which handles the 3D objects.
+  -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-world-aframe.prod.js"></script>
+
+  <!-- Google font for nice looking text -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* reset everything so there are no weird margins */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* CSS variables — easy to change colors in one place */
+    :root {
+      --blue:   #4A9EFF;
+      --orange: #FF8C42;
+      --green:  #4ade80;
+      --red:    #f87171;
+      --yellow: #facc15;
+      --bg:     rgba(8, 12, 24, 0.88);
+      --border: rgba(74, 158, 255, 0.2);
+      --text:   #E8F0FF;
+      --muted:  #4A6080;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #000;
+      color: var(--text);
+      overflow: hidden; /* no scrolling, everything fits on screen */
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── the AR scene sits behind everything ── */
+    a-scene {
+      position: fixed !important;
+      top: 0; left: 0;
+      width: 100% !important;
+      height: 100% !important;
+      z-index: 0;
+    }
+
+    /* ── UI overlay sits on top of the AR scene ── */
+    #ui {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 10;
+      pointer-events: none; /* clicks pass through unless we say otherwise */
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* ── top bar ── */
+    .topbar {
+      pointer-events: all;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: var(--bg);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* app logo */
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--blue);
+    }
+    .logo em { color: var(--orange); font-style: normal; }
+
+    /* capacity pill in the middle of the top bar */
+    #capBadge {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      padding: 5px 12px;
+      border-radius: 100px;
+      background: rgba(74,158,255,0.1);
+      border: 1px solid var(--border);
+      color: var(--blue);
+      transition: background 0.4s;
+    }
+
+    /* small hint text on the right */
+    .topbar-hint {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      text-align: right;
+      max-width: 80px;
+      line-height: 1.4;
+    }
+
+    /* ── scanning hint in the middle of screen ── */
+    #scanHint {
+      pointer-events: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      transition: opacity 0.5s;
+    }
+
+    #scanHint .scan-ring {
+      width: 120px; height: 120px;
+      border: 2px solid var(--blue);
+      border-radius: 50%;
+      margin: 0 auto 16px;
+      animation: pulse 2s ease-in-out infinite;
+      position: relative;
+    }
+
+    /* corner brackets on the scan ring */
+    #scanHint .scan-ring::before,
+    #scanHint .scan-ring::after {
+      content: '';
+      position: absolute;
+      width: 20px; height: 20px;
+      border-color: var(--orange);
+      border-style: solid;
+    }
+    #scanHint .scan-ring::before {
+      top: -2px; left: -2px;
+      border-width: 3px 0 0 3px;
+      border-radius: 4px 0 0 0;
+    }
+    #scanHint .scan-ring::after {
+      bottom: -2px; right: -2px;
+      border-width: 0 3px 3px 0;
+      border-radius: 0 0 4px 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%       { transform: scale(1.08); opacity: 0.6; }
+    }
+
+    #scanHint p {
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+      background: var(--bg);
+      backdrop-filter: blur(8px);
+      padding: 8px 16px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+    }
+
+    /* ── bottom panel ── */
+    #bottomPanel {
+      pointer-events: all;
+      background: var(--bg);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      padding: 0;
+    }
+
+    /* tab buttons at the top of the panel */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 12px 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .tab.active {
+      color: var(--blue);
+      border-bottom-color: var(--blue);
+    }
+
+    /* tab content areas */
+    .tab-pane {
+      display: none;
+      padding: 14px 16px;
+    }
+    .tab-pane.active { display: block; }
+
+    /* ── form inputs ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .field input {
+      width: 100%;
+      background: rgba(10,14,26,0.9);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .field input:focus { border-color: var(--blue); }
+
+    /* color swatches */
+    .swatches {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .swatches label {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 4px;
+    }
+
+    .swatch {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .swatch:hover { transform: scale(1.2); }
+    .swatch.sel   { border-color: white; transform: scale(1.2); }
+
+    /* buttons */
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 11px 16px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:hover  { opacity: 0.88; }
+
+    .btn-full  { width: 100%; }
+    .btn-blue  { background: var(--blue);   color: white; }
+    .btn-orange{ background: var(--orange); color: white; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .btn-danger{
+      background: rgba(248,113,113,0.15);
+      border: 1px solid rgba(248,113,113,0.4);
+      color: var(--red);
+    }
+
+    /* ── object list ── */
+    #objList {
+      max-height: 130px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .obj-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(74,158,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .obj-card:hover  { border-color: rgba(74,158,255,0.4); }
+    .obj-card.active { border-color: var(--blue); background: rgba(74,158,255,0.08); }
+
+    .obj-dot {
+      width: 12px; height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .obj-info { flex: 1; min-width: 0; }
+    .obj-name { font-size: 13px; font-weight: 500; }
+    .obj-dim  {
+      font-size: 10px;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+    }
+
+    .obj-remove {
+      background: none; border: none;
+      color: var(--muted); cursor: pointer;
+      font-size: 16px; padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.2s, background 0.2s;
+    }
+    .obj-remove:hover { color: var(--red); background: rgba(248,113,113,0.1); }
+
+    /* row of action buttons */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* ── fit analysis panel (top right) ── */
+    #fitPanel {
+      pointer-events: none;
+      position: fixed;
+      top: 80px; right: 12px;
+      background: var(--bg);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      min-width: 150px;
+      line-height: 1.7;
+    }
+
+    #fitPanel h4 {
+      font-size: 9px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .ok   { color: var(--green); }
+    .warn { color: var(--yellow); }
+    .bad  { color: var(--red); }
+
+    /* ── empty state ── */
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 14px 0;
+      font-family: 'Space Mono', monospace;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!--
+  ════════════════════════════════════════
+  A-FRAME + MINDAR SCENE
+  This is the actual AR part.
+  MindAR scans the surface with the camera,
+  then we place 3D objects on it.
+  ════════════════════════════════════════
+-->
+<a-scene
+  mindar-world="autoStart: true;"
+  vr-mode-ui="enabled: false"
+  renderer="colorManagement: true; physicallyCorrectLights: true;"
+  device-orientation-permission-ui="enabled: false"
+>
+  <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+  <!--
+    This entity is where our 3D content lives.
+    MindAR attaches it to a detected flat surface automatically.
+  -->
+  <a-entity id="arRoot" mindar-world-target="targetIndex: 0">
+
+    <!-- flat grid plane that shows the "floor" of the space -->
+    <a-plane
+      id="gridFloor"
+      rotation="-90 0 0"
+      width="3" height="3"
+      color="#0A0E1A"
+      opacity="0.5"
+      material="transparent: true; side: double"
+    ></a-plane>
+
+    <!-- grid lines going across the floor -->
+    <!-- these make it look like a measurement grid -->
+    <a-entity id="gridLines"></a-entity>
+
+    <!-- all user boxes go inside this container -->
+    <a-entity id="boxContainer"></a-entity>
+
+  </a-entity>
+
+</a-scene>
+
+
+<!--
+  ════════════════════════════════════════
+  UI OVERLAY
+  All the buttons, inputs, and labels
+  sit on top of the AR scene as HTML.
+  ════════════════════════════════════════
+-->
+<div id="ui">
+
+  <!-- top bar -->
+  <div class="topbar">
+    <div class="logo">سعة <em>·</em> Sa'ah</div>
+    <div id="capBadge">0 objects</div>
+    <div class="topbar-hint">Move camera<br/>to scan floor</div>
+  </div>
+
+  <!-- scanning animation shown before surface is detected -->
+  <div id="scanHint">
+    <div class="scan-ring"></div>
+    <p>Move camera slowly to detect surface</p>
+  </div>
+
+  <!-- fit analysis top right -->
+  <div id="fitPanel">
+    <h4>Fit Analysis</h4>
+    <div id="fitStatus" class="ok">Add objects to start</div>
+  </div>
+
+  <!-- bottom panel with all controls -->
+  <div id="bottomPanel">
+
+    <!-- tab buttons -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('add', this)">➕ Add Object</button>
+      <button class="tab"        onclick="showTab('list', this)">📦 Objects</button>
+      <button class="tab"        onclick="showTab('space', this)">📐 Space</button>
+    </div>
+
+    <!-- ADD TAB: user enters object details here -->
+    <div class="tab-pane active" id="tab-add">
+      <div class="form-grid">
+        <div class="field">
+          <label>Name</label>
+          <input type="text" id="objName" placeholder="Clothes Box" />
+        </div>
+        <div class="field">
+          <label>W cm</label>
+          <input type="number" id="objW" placeholder="50" min="5" max="300" />
+        </div>
+        <div class="field">
+          <label>D cm</label>
+          <input type="number" id="objD" placeholder="40" min="5" max="300" />
+        </div>
+        <div class="field">
+          <label>H cm</label>
+          <input type="number" id="objH" placeholder="30" min="5" max="300" />
+        </div>
+      </div>
+      <!-- color picker -->
+      <div class="swatches">
+        <label>Color</label>
+        <div id="swatchRow"></div>
+      </div>
+      <button class="btn btn-blue btn-full" onclick="addObject()">
+        Place in AR Scene
+      </button>
+    </div>
+
+    <!-- LIST TAB: shows all placed objects -->
+    <div class="tab-pane" id="tab-list">
+      <div id="objList">
+        <div class="empty">No objects yet — add one first!</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" style="flex:1;font-size:12px" onclick="rotateSelected()">↻ Rotate</button>
+        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="removeSelected()">✕ Remove</button>
+        <button class="btn btn-danger" style="flex:1;font-size:12px" onclick="clearAll()">🗑 Clear All</button>
+      </div>
+    </div>
+
+    <!-- SPACE TAB: lets user set the space dimensions -->
+    <div class="tab-pane" id="tab-space">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;font-family:'Space Mono',monospace">
+        Set the real dimensions of the space you are trying to fill:
+      </p>
+      <!-- preset buttons -->
+      <div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(120,100,80)">🚗 Car Boot</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(35,20,45)">🎒 Backpack</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(50,25,70)">🧳 Suitcase</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:7px 10px" onclick="setPreset(90,40,200)">📦 Shelf</button>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div class="field">
+          <label>Width cm</label>
+          <input type="number" id="spaceW" value="120" />
+        </div>
+        <div class="field">
+          <label>Depth cm</label>
+          <input type="number" id="spaceD" value="100" />
+        </div>
+        <div class="field">
+          <label>Height cm</label>
+          <input type="number" id="spaceH" value="80" />
+        </div>
+      </div>
+      <button class="btn btn-orange btn-full" onclick="updateSpaceSize()">Apply Space Size</button>
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+// ════════════════════════════════════════
+// APP STATE — all the data the app needs
+// ════════════════════════════════════════
+
+const app = {
+  objects: [],         // list of all objects the user has added
+  selectedId: null,    // which object is currently highlighted
+  nextId: 1,           // auto incrementing id for each object
+  color: '#4A9EFF',    // currently selected color
+
+  // space dimensions in cm (default: car boot)
+  space: { w: 120, d: 100, h: 80 },
+
+  // colors the user can pick from
+  colors: [
+    '#4A9EFF', // blue
+    '#FF8C42', // orange
+    '#4ade80', // green
+    '#f472b6', // pink
+    '#facc15', // yellow
+    '#a78bfa', // purple
+    '#f87171', // red
+    '#34d399', // teal
+  ],
+
+  // layout positions on the AR grid for placing boxes
+  // each is [x, z] in A-Frame units (we scale cm to units)
+  positions: [
+    [-0.5,  0.5], [0,  0.5], [0.5,  0.5],
+    [-0.5,  0  ], [0,  0  ], [0.5,  0  ],
+    [-0.5, -0.5], [0, -0.5], [0.5, -0.5],
+  ],
+
+  surfaceFound: false,  // has MindAR detected a surface yet?
+};
+
+// how many cm = 1 A-Frame unit
+// we use 1 unit = 100cm so a 50cm box = 0.5 units
+const CM = 0.01;
+
+// ════════════════════════════════════════
+// BUILD COLOR SWATCHES
+// ════════════════════════════════════════
+function buildSwatches() {
+  const row = document.getElementById('swatchRow');
+  app.colors.forEach(c => {
+    const dot = document.createElement('div');
+    dot.className = 'swatch' + (c === app.color ? ' sel' : '');
+    dot.style.background = c;
+    dot.style.display = 'inline-block';
+
+    // when user clicks a color, make it selected
+    dot.onclick = () => {
+      document.querySelectorAll('.swatch').forEach(s => s.classList.remove('sel'));
+      dot.classList.add('sel');
+      app.color = c;
+    };
+
+    row.appendChild(dot);
+  });
+}
+buildSwatches();
+
+// ════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════
+function showTab(name, btn) {
+  // hide all tab panes
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+
+  // show the one we want
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ════════════════════════════════════════
+// SPACE PRESETS
+// ════════════════════════════════════════
+function setPreset(w, d, h) {
+  // fill in the space dimension inputs
+  document.getElementById('spaceW').value = w;
+  document.getElementById('spaceD').value = d;
+  document.getElementById('spaceH').value = h;
+  updateSpaceSize();
+}
+
+function updateSpaceSize() {
+  app.space.w = +document.getElementById('spaceW').value || 120;
+  app.space.d = +document.getElementById('spaceD').value || 100;
+  app.space.h = +document.getElementById('spaceH').value || 80;
+  updateFitPanel();
+}
+
+// ════════════════════════════════════════
+// BUILD AR GRID LINES
+// Makes the floor look like a measurement grid
+// ════════════════════════════════════════
+function buildGrid() {
+  const container = document.getElementById('gridLines');
+  container.innerHTML = '';
+
+  // draw 5 lines in each direction
+  const lines = 5;
+  const size  = 1.5; // half the grid size in A-Frame units
+  const step  = (size * 2) / lines;
+
+  for (let i = 0; i <= lines; i++) {
+    const pos = -size + i * step;
+
+    // horizontal line (goes left to right)
+    const h = document.createElement('a-box');
+    h.setAttribute('position', `0 0.001 ${pos}`);
+    h.setAttribute('width',  size * 2);
+    h.setAttribute('height', 0.002);
+    h.setAttribute('depth',  0.008);
+    h.setAttribute('color',  '#4A9EFF');
+    h.setAttribute('opacity', '0.25');
+    h.setAttribute('material', 'transparent: true');
+    container.appendChild(h);
+
+    // vertical line (goes front to back)
+    const v = document.createElement('a-box');
+    v.setAttribute('position', `${pos} 0.001 0`);
+    v.setAttribute('width',  0.008);
+    v.setAttribute('height', 0.002);
+    v.setAttribute('depth',  size * 2);
+    v.setAttribute('color',  '#4A9EFF');
+    v.setAttribute('opacity', '0.25');
+    v.setAttribute('material', 'transparent: true');
+    container.appendChild(v);
+  }
+}
+buildGrid();
+
+// ════════════════════════════════════════
+// ADD OBJECT TO AR SCENE
+// ════════════════════════════════════════
+function addObject() {
+  const name = document.getElementById('objName').value.trim() || 'Box';
+  const w    = parseFloat(document.getElementById('objW').value);
+  const d    = parseFloat(document.getElementById('objD').value);
+  const h    = parseFloat(document.getElementById('objH').value);
+
+  // make sure all fields are filled
+  if (!w || !d || !h) {
+    alert('Please enter Width, Depth, and Height!');
+    return;
+  }
+
+  // warn if object is bigger than the space
+  if (w > app.space.w || d > app.space.d) {
+    alert(`This object (${w}×${d} cm) is bigger than your space (${app.space.w}×${app.space.d} cm)!`);
+    return;
+  }
+
+  const id  = app.nextId++;
+  const idx = app.objects.length % app.positions.length; // pick next position slot
+  const pos = app.positions[idx];
+
+  // store the object data
+  const obj = { id, name, w, d, h, color: app.color };
+  app.objects.push(obj);
+
+  // convert cm to A-Frame units
+  const aw = w * CM; // A-Frame width
+  const ad = d * CM; // A-Frame depth
+  const ah = h * CM; // A-Frame height
+
+  // create the parent entity (holds box + label)
+  const container = document.getElementById('boxContainer');
+  const parent = document.createElement('a-entity');
+  parent.id = 'obj-' + id;
+  // position it: x and z from our grid, y = half height so it sits on floor
+  parent.setAttribute('position', `${pos[0]} ${ah / 2} ${pos[1]}`);
+
+  // the actual 3D box
+  const box = document.createElement('a-box');
+  box.id = 'box-' + id;
+  box.setAttribute('width',  aw);
+  box.setAttribute('height', ah);
+  box.setAttribute('depth',  ad);
+  box.setAttribute('color',  obj.color);
+  box.setAttribute('material', `color: ${obj.color}; opacity: 0.7; transparent: true`);
+
+  // wireframe layer on top of the box for AR look
+  const wire = document.createElement('a-box');
+  wire.setAttribute('width',  aw + 0.004);
+  wire.setAttribute('height', ah + 0.004);
+  wire.setAttribute('depth',  ad + 0.004);
+  wire.setAttribute('material', `wireframe: true; color: ${obj.color}; opacity: 1`);
+
+  // text label floating above the box
+  const text = document.createElement('a-text');
+  text.setAttribute('value', `${name}\n${w}×${d}×${h}cm`);
+  text.setAttribute('align', 'center');
+  text.setAttribute('color', 'white');
+  text.setAttribute('scale', '0.25 0.25 0.25');
+  // position text above the top of the box
+  text.setAttribute('position', `0 ${ah / 2 + 0.1} 0`);
+  text.setAttribute('look-at', '[camera]'); // text always faces camera
+
+  // put it all together
+  parent.appendChild(box);
+  parent.appendChild(wire);
+  parent.appendChild(text);
+  container.appendChild(parent);
+
+  // clear inputs for next object
+  document.getElementById('objName').value = '';
+  document.getElementById('objW').value    = '';
+  document.getElementById('objD').value    = '';
+  document.getElementById('objH').value    = '';
+
+  // update the list and stats
+  renderList();
+  updateFitPanel();
+}
+
+// ════════════════════════════════════════
+// RENDER OBJECT LIST
+// ════════════════════════════════════════
+function renderList() {
+  const list = document.getElementById('objList');
+  document.getElementById('capBadge').textContent = app.objects.length + ' object' + (app.objects.length !== 1 ? 's' : '');
+
+  if (app.objects.length === 0) {
+    list.innerHTML = '<div class="empty">No objects yet — add one first!</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  app.objects.forEach(o => {
+    const card = document.createElement('div');
+    card.className = 'obj-card' + (o.id === app.selectedId ? ' active' : '');
+
+    card.innerHTML = `
+      <div class="obj-dot" style="background:${o.color}"></div>
+      <div class="obj-info">
+        <div class="obj-name">${o.name}</div>
+        <div class="obj-dim">${o.w}×${o.d}×${o.h} cm</div>
+      </div>
+      <button class="obj-remove" onclick="removeById(${o.id}); event.stopPropagation()">×</button>
+    `;
+
+    // clicking a card selects that object
+    card.onclick = () => selectObj(o.id);
+    list.appendChild(card);
+  });
+}
+
+// ════════════════════════════════════════
+// SELECT AN OBJECT (highlights it in AR)
+// ════════════════════════════════════════
+function selectObj(id) {
+  app.selectedId = id;
+
+  // make the selected box pulse, reset others
+  app.objects.forEach(o => {
+    const box = document.getElementById('box-' + o.id);
+    if (!box) return;
+
+    if (o.id === id) {
+      // pulsing scale animation to show it's selected
+      box.setAttribute('animation', 'property: scale; from: 1 1 1; to: 1.08 1.08 1.08; loop: true; dur: 600; dir: alternate; easing: easeInOutSine');
+    } else {
+      // remove the animation from non-selected boxes
+      box.removeAttribute('animation');
+      box.setAttribute('scale', '1 1 1');
+    }
+  });
+
+  renderList();
+}
+
+// ════════════════════════════════════════
+// ROTATE SELECTED OBJECT
+// Swaps width and depth = 90 degree rotation
+// ════════════════════════════════════════
+function rotateSelected() {
+  if (!app.selectedId) { alert('Select an object from the list first!'); return; }
+
+  const obj = app.objects.find(o => o.id === app.selectedId);
+  if (!obj) return;
+
+  // swap width and depth
+  [obj.w, obj.d] = [obj.d, obj.w];
+
+  // update the 3D box size
+  const box  = document.getElementById('box-' + obj.id);
+  const wire = box ? box.nextElementSibling : null;
+  if (box) {
+    box.setAttribute('width', obj.w * CM);
+    box.setAttribute('depth', obj.d * CM);
+  }
+  if (wire) {
+    wire.setAttribute('width', obj.w * CM + 0.004);
+    wire.setAttribute('depth', obj.d * CM + 0.004);
+  }
+
+  renderList();
+}
+
+// ════════════════════════════════════════
+// REMOVE OBJECT
+// ════════════════════════════════════════
+function removeSelected() {
+  if (!app.selectedId) { alert('Select an object first!'); return; }
+  removeById(app.selectedId);
+}
+
+function removeById(id) {
+  // remove the A-Frame entity from the scene
+  const el = document.getElementById('obj-' + id);
+  if (el) el.parentNode.removeChild(el);
+
+  // remove from our list
+  app.objects = app.objects.filter(o => o.id !== id);
+  if (app.selectedId === id) app.selectedId = null;
+
+  renderList();
+  updateFitPanel();
+}
+
+function clearAll() {
+  if (!app.objects.length) return;
+  if (!confirm('Remove all objects from the AR scene?')) return;
+
+  app.objects.forEach(o => {
+    const el = document.getElementById('obj-' + o.id);
+    if (el) el.parentNode.removeChild(el);
+  });
+
+  app.objects   = [];
+  app.selectedId = null;
+  renderList();
+  updateFitPanel();
+}
+
+// ════════════════════════════════════════
+// FIT ANALYSIS
+// Tells user if everything will fit
+// ════════════════════════════════════════
+function updateFitPanel() {
+  // total volume of the space in cm³
+  const spaceVol = app.space.w * app.space.d * app.space.h;
+
+  // total volume of all objects
+  const usedVol = app.objects.reduce((sum, o) => sum + o.w * o.d * o.h, 0);
+
+  // percentage used
+  const pct = Math.min(100, Math.round((usedVol / spaceVol) * 100));
+
+  const el = document.getElementById('fitStatus');
+
+  if (app.objects.length === 0) {
+    el.className = 'ok';
+    el.textContent = 'Add objects to start';
+    return;
+  }
+
+  if (pct < 60) {
+    el.className = 'ok';
+    el.textContent = `✓ ${pct}% full\nLooks good!`;
+  } else if (pct < 85) {
+    el.className = 'warn';
+    el.textContent = `⚠ ${pct}% full\nGetting tight`;
+  } else {
+    el.className = 'bad';
+    el.textContent = `✗ ${pct}% full\nWon't fit!`;
+  }
+}
+
+// ════════════════════════════════════════
+// MINDAR SURFACE DETECTION EVENTS
+// Hide the scan hint once surface is found
+// ════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  const scene = document.querySelector('a-scene');
+
+  scene.addEventListener('arReady', () => {
+    console.log('MindAR is ready!');
+  });
+
+  // when a flat surface is detected, hide the scanning animation
+  const root = document.getElementById('arRoot');
+  if (root) {
+    root.addEventListener('targetFound', () => {
+      app.surfaceFound = true;
+      document.getElementById('scanHint').style.opacity = '0';
+      setTimeout(() => document.getElementById('scanHint').style.display = 'none', 500);
+    });
+
+    root.addEventListener('targetLost', () => {
+      document.getElementById('scanHint').style.display = 'flex';
+      document.getElementById('scanHint').style.opacity = '1';
+    });
+  }
+});
+</script>
+</body>
+</html>
