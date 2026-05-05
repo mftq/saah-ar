@@ -1,291 +1,116 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>سعة — AR Space Organizer</title>
+  <meta charset="utf-8">
+  <title>Sa'ah AR</title>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+
+  <!-- WebXR AR -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe-ar-hit-test-component@1.0.0/dist/aframe-ar-hit-test-component.min.js"></script>
 
   <style>
-    body { margin:0; overflow:hidden; background:black; color:white; font-family:sans-serif; }
-    #cam { position:fixed; width:100%; height:100%; object-fit:cover; z-index:0; }
-    #c { position:fixed; width:100%; height:100%; z-index:1; pointer-events:none; }
-    #ui { position:fixed; z-index:10; top:10px; left:10px; }
-    input, button { margin:4px; padding:8px; }
+    body { margin:0; }
+    #ui {
+      position:fixed;
+      bottom:20px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:10;
+      background:rgba(0,0,0,0.6);
+      padding:10px;
+      border-radius:10px;
+    }
+    input { width:60px; }
   </style>
 </head>
 
 <body>
 
-<!-- camera -->
-<video id="cam" autoplay playsinline muted></video>
-
-<!-- 3D -->
-<canvas id="c"></canvas>
-
-<!-- simple UI -->
+<!-- UI -->
 <div id="ui">
-  <h3>Sa'ah</h3>
-
-  <input id="oN" placeholder="Name"><br>
-  <input id="oW" placeholder="Width"><br>
-  <input id="oD" placeholder="Depth"><br>
-  <input id="oH" placeholder="Height"><br>
-
-  <button onclick="queueObj()">Place Object</button>
-
-  <br><br>
-
-  <input id="sW" value="120">
-  <input id="sD" value="100">
-  <input id="sH" value="80">
-
-  <button onclick="applySpace()">Apply Space</button>
+  <input id="w" placeholder="W">
+  <input id="d" placeholder="D">
+  <input id="h" placeholder="H">
+  <button onclick="queue()">Add</button>
 </div>
+
+<a-scene
+  vr-mode-ui="enabled: false"
+  renderer="logarithmicDepthBuffer: true"
+  embedded
+  webxr="requiredFeatures: hit-test, local-floor">
+
+  <!-- camera -->
+  <a-camera position="0 1.6 0"></a-camera>
+
+  <!-- reticle (this is the grid base) -->
+  <a-entity
+    id="reticle"
+    geometry="primitive: ring; radiusInner: 0.05; radiusOuter: 0.06"
+    material="color: #00aaff"
+    rotation="-90 0 0"
+    visible="false"
+    ar-hit-test="target: #reticle">
+  </a-entity>
+
+</a-scene>
 
 <script>
 
-// ========================
-// THREE SETUP
-// ========================
-
-const canvas = document.getElementById('c');
-
-// transparent renderer so camera shows behind
-const renderer = new THREE.WebGLRenderer({ canvas, alpha:true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x000000, 0); // important for transparency
-
-const scene = new THREE.Scene();
-
-// camera setup
-const cam = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-cam.position.set(0,1.5,0);
-cam.lookAt(0,0,-2);
-
-// lights
-scene.add(new THREE.AmbientLight(0xffffff,0.8));
-const light = new THREE.DirectionalLight(0xffffff,0.5);
-light.position.set(2,5,2);
-scene.add(light);
-
-// ========================
-// GLOBAL STATE
-// ========================
-
-const CM = 0.01; // cm to meter
-
-let objects = [];
+// store objects
 let queued = null;
-let selected = null;
 
-// space size
-let space = { w:120, d:100, h:80 };
+// get scene + reticle
+const scene = document.querySelector('a-scene');
+const reticle = document.getElementById('reticle');
 
-// ========================
-// CAMERA START
-// ========================
-
-async function startCamera() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:"environment" }
-    });
-    document.getElementById('cam').srcObject = stream;
-  } catch(e) {
-    alert("camera not working");
-  }
-}
-startCamera();
-
-// ========================
-// BUILD GRID (dynamic)
-// ========================
-
-function buildGrid() {
-
-  // remove old grid if exists
-  const old = scene.getObjectByName("grid");
-  if(old) scene.remove(old);
-
-  const w = space.w * CM;
-  const d = space.d * CM;
-
-  const size = Math.max(w,d);
-
-  // grid lines
-  const grid = new THREE.GridHelper(size, 20, 0x00aaff, 0x004466);
-  grid.position.set(0,0,-2);
-  grid.name = "grid";
-  scene.add(grid);
-
-  // floor (important for clicking)
-  const floorGeo = new THREE.PlaneGeometry(w,d);
-  const floorMat = new THREE.MeshBasicMaterial({
-    color:0x000000,
-    transparent:true,
-    opacity:0.2,
-    side:THREE.DoubleSide
-  });
-
-  const floor = new THREE.Mesh(floorGeo,floorMat);
-  floor.rotation.x = -Math.PI/2;
-  floor.position.set(0,0.001,-2);
-  floor.name = "floor";
-
-  scene.add(floor);
-}
-buildGrid();
-
-// ========================
-// APPLY SPACE
-// ========================
-
-function applySpace(){
-  space.w = +document.getElementById("sW").value;
-  space.d = +document.getElementById("sD").value;
-  space.h = +document.getElementById("sH").value;
-
-  buildGrid(); // rebuild grid based on new size
-}
-
-// ========================
-// QUEUE OBJECT
-// ========================
-
-function queueObj(){
-
-  const name = document.getElementById("oN").value || "Box";
-  const w = +document.getElementById("oW").value;
-  const d = +document.getElementById("oD").value;
-  const h = +document.getElementById("oH").value;
+// queue object
+function queue(){
+  const w = document.getElementById("w").value;
+  const d = document.getElementById("d").value;
+  const h = document.getElementById("h").value;
 
   if(!w || !d || !h){
-    alert("enter dimensions");
+    alert("enter all values");
     return;
   }
 
-  queued = {name,w,d,h};
+  queued = {w,d,h};
 }
 
-// ========================
-// RAYCAST SETUP
-// ========================
+// place object when screen tapped
+scene.addEventListener('click', () => {
 
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
+  if(!queued || !reticle.getAttribute('visible')) return;
 
-// ========================
-// CLICK TO PLACE
-// ========================
+  const pos = reticle.getAttribute('position');
 
-window.addEventListener("click",(e)=>{
+  const box = document.createElement('a-box');
 
-  if(!queued) return;
+  // convert cm → meters
+  box.setAttribute('width', queued.w / 100);
+  box.setAttribute('depth', queued.d / 100);
+  box.setAttribute('height', queued.h / 100);
 
-  // convert click to 3D
-  mouse.x = (e.clientX/window.innerWidth)*2 -1;
-  mouse.y = -(e.clientY/window.innerHeight)*2 +1;
-
-  raycaster.setFromCamera(mouse,cam);
-
-  const floor = scene.getObjectByName("floor");
-  const hit = raycaster.intersectObject(floor);
-
-  if(hit.length > 0){
-    createBox(hit[0].point);
-  }
-
-});
-
-// ========================
-// CREATE BOX
-// ========================
-
-function createBox(pos){
-
-  const w = queued.w * CM;
-  const d = queued.d * CM;
-  const h = queued.h * CM;
-
-  const geo = new THREE.BoxGeometry(w,h,d);
-
-  const mat = new THREE.MeshBasicMaterial({
-    color:0x00aaff,
-    transparent:true,
-    opacity:0.6
+  box.setAttribute('position', {
+    x: pos.x,
+    y: pos.y + (queued.h/200), // lift it above floor
+    z: pos.z
   });
 
-  const box = new THREE.Mesh(geo,mat);
+  box.setAttribute('material', 'opacity: 0.5; color: #00aaff');
 
-  // position it where user clicked
-  box.position.set(pos.x, h/2, pos.z);
+  // add drag movement
+  box.setAttribute('draggable', '');
 
-  box.name = "obj";
-
-  scene.add(box);
-
-  objects.push(box);
+  scene.appendChild(box);
 
   queued = null;
-}
-
-// ========================
-// DRAG SYSTEM
-// ========================
-
-// select object
-window.addEventListener("pointerdown",(e)=>{
-
-  mouse.x = (e.clientX/window.innerWidth)*2 -1;
-  mouse.y = -(e.clientY/window.innerHeight)*2 +1;
-
-  raycaster.setFromCamera(mouse,cam);
-
-  const hits = raycaster.intersectObjects(objects);
-
-  if(hits.length>0){
-    selected = hits[0].object;
-  }
-
 });
-
-// move object
-window.addEventListener("pointermove",(e)=>{
-
-  if(!selected) return;
-
-  mouse.x = (e.clientX/window.innerWidth)*2 -1;
-  mouse.y = -(e.clientY/window.innerHeight)*2 +1;
-
-  raycaster.setFromCamera(mouse,cam);
-
-  const floor = scene.getObjectByName("floor");
-  const hit = raycaster.intersectObject(floor);
-
-  if(hit.length>0){
-    selected.position.x = hit[0].point.x;
-    selected.position.z = hit[0].point.z;
-  }
-
-});
-
-// release
-window.addEventListener("pointerup",()=>{
-  selected = null;
-});
-
-// ========================
-// LOOP
-// ========================
-
-function animate(){
-  requestAnimationFrame(animate);
-  renderer.render(scene,cam);
-}
-animate();
 
 </script>
+
 </body>
 </html>
