@@ -150,8 +150,8 @@ const scene = new THREE.Scene();
 
 // camera looks straight forward
 const cam = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-cam.position.set(0, 0, 0);
-cam.lookAt(0, 0, -1);
+cam.position.set(0, 0, 3);
+cam.lookAt(0, 0, 0);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const dl = new THREE.DirectionalLight(0xffffff, 0.5);
@@ -164,44 +164,23 @@ window.addEventListener('resize', () => {
   cam.updateProjectionMatrix();
 });
 
-// grid centered in front of camera, small enough to not fill screen
+// grid tilted to look like floor — centered in screen, not filling it
 const gridGroup = new THREE.Group();
-gridGroup.position.set(0, 0, -2); // 2 units in front of camera = center of screen
+gridGroup.position.set(0, -0.3, 0);
+gridGroup.rotation.x = -Math.PI / 3; // tilt 60deg so it looks like floor
 scene.add(gridGroup);
 
-const grid = new THREE.GridHelper(1.4, 10, 0x4A9EFF, 0x1E3A5F);
+const grid = new THREE.GridHelper(2.5, 12, 0x4A9EFF, 0x1E3A5F);
 grid.material.transparent = true;
 grid.material.opacity = 0.6;
 gridGroup.add(grid);
 
 const floorMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(1.4, 1.4),
-  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.22, side:THREE.DoubleSide })
+  new THREE.PlaneGeometry(2.5, 2.5),
+  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.25, side:THREE.DoubleSide })
 );
 floorMesh.rotation.x = -Math.PI/2;
 gridGroup.add(floorMesh);
-
-// gyroscope — rotate the grid based on phone tilt
-// so grid always faces whatever surface you point at
-function startGyro() {
-  window.addEventListener('deviceorientation', e => {
-    if (!e.beta) return;
-    // beta=0 means phone flat, beta=90 means phone upright
-    // we rotate grid X axis to compensate so it always looks flat on surface
-    const b = THREE.MathUtils.degToRad(e.beta  || 0);
-    const g = THREE.MathUtils.degToRad(e.gamma || 0);
-    gridGroup.rotation.x = b - Math.PI / 2;
-    gridGroup.rotation.z = -g;
-  });
-}
-
-// iOS needs permission for gyro
-if (typeof DeviceOrientationEvent !== 'undefined' &&
-    typeof DeviceOrientationEvent.requestPermission === 'function') {
-  DeviceOrientationEvent.requestPermission().then(s => { if (s==='granted') startGyro(); }).catch(()=>{});
-} else {
-  startGyro();
-}
 
 // render loop
 function animate() { requestAnimationFrame(animate); renderer.render(scene, cam); }
@@ -220,15 +199,15 @@ const CM = 0.01;
 
 // 9 spread out slots on the grid — no overlap
 const SLOTS = [
-  new THREE.Vector3(-1.2, 0, -1.2),
-  new THREE.Vector3( 0,   0, -1.2),
-  new THREE.Vector3( 1.2, 0, -1.2),
-  new THREE.Vector3(-1.2, 0,  0  ),
+  new THREE.Vector3(-0.7, 0, -0.7),
+  new THREE.Vector3( 0,   0, -0.7),
+  new THREE.Vector3( 0.7, 0, -0.7),
+  new THREE.Vector3(-0.7, 0,  0  ),
   new THREE.Vector3( 0,   0,  0  ),
-  new THREE.Vector3( 1.2, 0,  0  ),
-  new THREE.Vector3(-1.2, 0,  1.2),
-  new THREE.Vector3( 0,   0,  1.2),
-  new THREE.Vector3( 1.2, 0,  1.2),
+  new THREE.Vector3( 0.7, 0,  0  ),
+  new THREE.Vector3(-0.7, 0,  0.7),
+  new THREE.Vector3( 0,   0,  0.7),
+  new THREE.Vector3( 0.7, 0,  0.7),
 ];
 
 // START APP
