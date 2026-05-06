@@ -7,116 +7,127 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet"/>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --blue:#4A9EFF; --orange:#FF8C42; --green:#4ade80;
-      --red:#f87171; --yellow:#facc15;
-      --bg:rgba(8,12,24,0.9); --border:rgba(74,158,255,0.2);
-      --text:#E8F0FF; --muted:#4A6080;
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --blue:#4A9EFF;--orange:#FF8C42;--green:#4ade80;
+      --red:#f87171;--yellow:#facc15;
+      --bg:rgba(8,12,24,0.92);--border:rgba(74,158,255,0.2);
+      --text:#E8F0FF;--muted:#4A6080;
     }
-    html,body { overflow:hidden; width:100%; height:100%; font-family:'DM Sans',sans-serif; background:#000; color:var(--text); }
-
-    /* camera fills entire screen */
-    #cam { position:fixed; top:0; left:0; width:100vw; height:100vh; object-fit:cover; z-index:0; }
-
-    /* three.js canvas on top — transparent so camera shows through */
-    #c { position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:1; pointer-events:none; }
+    html,body{overflow:hidden;width:100%;height:100%;font-family:'DM Sans',sans-serif;background:#000;color:var(--text);}
+    #c{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1;display:block;}
 
     /* splash */
-    #splash { position:fixed; inset:0; background:#080C18; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:28px; text-align:center; }
-    .logo-big { font-family:'Space Mono',monospace; font-size:52px; color:var(--blue); }
-    .logo-big span { color:var(--orange); }
-    .tagline { font-size:13px; color:var(--muted); max-width:260px; line-height:1.6; }
-    .steps { background:rgba(74,158,255,0.05); border:1px solid var(--border); border-radius:14px; padding:14px 16px; text-align:left; width:100%; max-width:300px; }
-    .steps h3 { font-family:'Space Mono',monospace; font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
-    .step { display:flex; align-items:flex-start; gap:10px; margin-bottom:7px; font-size:13px; line-height:1.4; }
-    .sn { width:20px; height:20px; border-radius:50%; background:rgba(74,158,255,0.15); border:1px solid var(--blue); color:var(--blue); font-family:'Space Mono',monospace; font-size:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-    .btn-start { width:100%; max-width:300px; background:var(--blue); color:white; border:none; border-radius:13px; padding:15px; font-family:'DM Sans',sans-serif; font-size:16px; font-weight:600; cursor:pointer; }
+    #splash{position:fixed;inset:0;background:#080C18;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:28px;text-align:center;}
+    .logo-big{font-family:'Space Mono',monospace;font-size:52px;color:var(--blue);}
+    .logo-big span{color:var(--orange);}
+    .tagline{font-size:13px;color:var(--muted);max-width:260px;line-height:1.6;}
+    .steps{background:rgba(74,158,255,0.05);border:1px solid var(--border);border-radius:14px;padding:14px 16px;text-align:left;width:100%;max-width:300px;}
+    .steps h3{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+    .step{display:flex;align-items:flex-start;gap:10px;margin-bottom:7px;font-size:13px;line-height:1.4;}
+    .sn{width:20px;height:20px;border-radius:50%;background:rgba(74,158,255,0.15);border:1px solid var(--blue);color:var(--blue);font-family:'Space Mono',monospace;font-size:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .btn-start{width:100%;max-width:300px;background:var(--blue);color:white;border:none;border-radius:13px;padding:15px;font-family:'DM Sans',sans-serif;font-size:16px;font-weight:600;cursor:pointer;}
+    #nosupport{display:none;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:12px;padding:14px;font-size:13px;color:var(--red);line-height:1.5;max-width:300px;}
 
-    /* UI overlay */
-    #ui { position:fixed; top:0; left:0; width:100%; height:100%; z-index:10; pointer-events:none; display:none; flex-direction:column; justify-content:space-between; }
+    /* UI */
+    #ui{position:fixed;top:0;left:0;width:100%;height:100%;z-index:10;pointer-events:none;display:none;flex-direction:column;justify-content:space-between;}
+    .topbar{pointer-events:all;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--bg);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);}
+    .logo{font-family:'Space Mono',monospace;font-size:17px;color:var(--blue);}
+    .logo em{color:var(--orange);font-style:normal;}
+    #capBadge{font-family:'Space Mono',monospace;font-size:11px;padding:5px 11px;border-radius:100px;background:rgba(74,158,255,0.1);border:1px solid var(--border);color:var(--blue);}
 
-    /* top bar */
-    .topbar { pointer-events:all; display:flex; align-items:center; justify-content:space-between; padding:13px 16px; background:var(--bg); backdrop-filter:blur(16px); border-bottom:1px solid var(--border); }
-    .logo { font-family:'Space Mono',monospace; font-size:17px; color:var(--blue); }
-    .logo em { color:var(--orange); font-style:normal; }
-    #capBadge { font-family:'Space Mono',monospace; font-size:11px; padding:5px 11px; border-radius:100px; background:rgba(74,158,255,0.1); border:1px solid var(--border); color:var(--blue); }
+    /* scan hint */
+    #scanHint{pointer-events:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;transition:opacity 0.5s;}
+    .ring{width:90px;height:90px;border:2px solid rgba(74,158,255,0.6);border-radius:50%;margin:0 auto 12px;animation:pulse 2s ease-in-out infinite;}
+    @keyframes pulse{0%,100%{transform:scale(1);opacity:0.9;}50%{transform:scale(1.12);opacity:0.3;}}
+    .pill{background:var(--bg);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:100px;padding:8px 16px;font-size:12px;font-family:'Space Mono',monospace;color:var(--text);}
 
-    /* drag hint */
-    #dragHint { pointer-events:none; position:fixed; bottom:220px; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border); border-radius:100px; padding:8px 16px; font-size:12px; font-family:'Space Mono',monospace; color:var(--text); display:none; white-space:nowrap; }
+    /* surface info */
+    #surfaceInfo{pointer-events:none;position:fixed;top:70px;left:10px;background:var(--bg);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:11px;padding:9px 13px;font-family:'Space Mono',monospace;font-size:11px;display:none;}
+    #surfaceInfo h4{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
 
     /* place button */
-    #placeBtn { pointer-events:all; position:fixed; bottom:220px; left:50%; transform:translateX(-50%); background:var(--blue); color:white; border:none; border-radius:100px; padding:13px 26px; font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600; cursor:pointer; display:none; white-space:nowrap; animation:glow 2s ease-in-out infinite; }
-    @keyframes glow { 0%,100%{box-shadow:0 0 20px rgba(74,158,255,0.4);}50%{box-shadow:0 0 50px rgba(74,158,255,0.9);} }
+    #placeBtn{pointer-events:all;position:fixed;bottom:220px;left:50%;transform:translateX(-50%);background:var(--blue);color:white;border:none;border-radius:100px;padding:14px 28px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;display:none;white-space:nowrap;animation:glow 2s ease-in-out infinite;}
+    @keyframes glow{0%,100%{box-shadow:0 0 20px rgba(74,158,255,0.4);}50%{box-shadow:0 0 50px rgba(74,158,255,0.9);}}
+
+    /* drag hint */
+    #dragHint{pointer-events:none;position:fixed;bottom:220px;left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--border);border-radius:100px;padding:8px 16px;font-size:12px;font-family:'Space Mono',monospace;color:var(--text);display:none;white-space:nowrap;}
 
     /* fit panel */
-    #fitPanel { pointer-events:none; position:fixed; top:70px; right:10px; background:var(--bg); backdrop-filter:blur(10px); border:1px solid var(--border); border-radius:11px; padding:9px 13px; font-family:'Space Mono',monospace; font-size:11px; min-width:138px; line-height:1.7; }
-    #fitPanel h4 { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
-    .ok{color:var(--green);} .warn{color:var(--yellow);} .bad{color:var(--red);}
+    #fitPanel{pointer-events:none;position:fixed;top:70px;right:10px;background:var(--bg);backdrop-filter:blur(10px);border:1px solid var(--border);border-radius:11px;padding:9px 13px;font-family:'Space Mono',monospace;font-size:11px;min-width:138px;line-height:1.7;}
+    #fitPanel h4{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+    .ok{color:var(--green);}.warn{color:var(--yellow);}.bad{color:var(--red);}
 
-    /* bottom panel */
-    #btm { pointer-events:all; background:var(--bg); backdrop-filter:blur(20px); border-top:1px solid var(--border); }
-    .tabs { display:flex; border-bottom:1px solid var(--border); }
-    .tab { flex:1; background:transparent; border:none; border-bottom:2px solid transparent; color:var(--muted); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500; padding:10px 6px; cursor:pointer; transition:all 0.2s; text-align:center; }
-    .tab.active { color:var(--blue); border-bottom-color:var(--blue); }
-    .tp { display:none; padding:13px 14px; } .tp.active { display:block; }
-    .fg { display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:7px; margin-bottom:9px; }
-    .field label { display:block; font-size:10px; color:var(--muted); font-family:'Space Mono',monospace; text-transform:uppercase; letter-spacing:1px; margin-bottom:3px; }
-    .field input { width:100%; background:rgba(10,14,26,0.9); border:1px solid var(--border); color:var(--text); border-radius:7px; padding:8px 9px; font-family:'DM Sans',sans-serif; font-size:14px; outline:none; }
-    .field input:focus { border-color:var(--blue); }
-    .sw { display:flex; align-items:center; gap:7px; margin-bottom:11px; flex-wrap:wrap; }
-    .sw label { font-size:10px; color:var(--muted); font-family:'Space Mono',monospace; text-transform:uppercase; letter-spacing:1px; }
-    .dot { width:23px; height:23px; border-radius:50%; cursor:pointer; border:2px solid transparent; transition:transform 0.15s,border-color 0.15s; display:inline-block; }
-    .dot:hover{transform:scale(1.2);} .dot.sel{border-color:white;transform:scale(1.2);}
+    /* bottom */
+    #btm{pointer-events:all;background:var(--bg);backdrop-filter:blur(20px);border-top:1px solid var(--border);}
+    .tabs{display:flex;border-bottom:1px solid var(--border);}
+    .tab{flex:1;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:10px 6px;cursor:pointer;transition:all 0.2s;text-align:center;}
+    .tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+    .tp{display:none;padding:13px 14px;}.tp.active{display:block;}
+    .fg{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:7px;margin-bottom:9px;}
+    .field label{display:block;font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px;}
+    .field input{width:100%;background:rgba(10,14,26,0.9);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 9px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none;}
+    .field input:focus{border-color:var(--blue);}
+    .sw{display:flex;align-items:center;gap:7px;margin-bottom:11px;flex-wrap:wrap;}
+    .sw label{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;}
+    .dot{width:23px;height:23px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform 0.15s,border-color 0.15s;display:inline-block;}
+    .dot:hover{transform:scale(1.2);}.dot.sel{border-color:white;transform:scale(1.2);}
     .btn{border:none;border-radius:9px;padding:10px 13px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:opacity 0.2s;}
     .btn:hover{opacity:0.88;}
-    .bf{width:100%;} .bb{background:var(--blue);color:white;} .bo{background:var(--orange);color:white;}
+    .bf{width:100%;}.bb{background:var(--blue);color:white;}.bo{background:var(--orange);color:white;}
     .bg2{background:transparent;border:1px solid var(--border);color:var(--muted);}
     .bd{background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.3);color:var(--red);}
     #ol{max-height:115px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:9px;}
     .oc{display:flex;align-items:center;gap:9px;background:rgba(74,158,255,0.04);border:1px solid var(--border);border-radius:7px;padding:7px 10px;cursor:pointer;transition:all 0.2s;}
-    .oc:hover{border-color:rgba(74,158,255,0.4);} .oc.active{border-color:var(--blue);background:rgba(74,158,255,0.08);}
+    .oc:hover{border-color:rgba(74,158,255,0.4);}.oc.active{border-color:var(--blue);background:rgba(74,158,255,0.08);}
     .od{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
-    .oi{flex:1;min-width:0;} .on{font-size:13px;font-weight:500;} .odim{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;}
-    .ox{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:2px 5px;border-radius:3px;}
+    .oi{flex:1;min-width:0;}.on{font-size:13px;font-weight:500;}.odim{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;}
+    .ox{background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:2px 5px;}
     .ox:hover{color:var(--red);}
     .br{display:flex;gap:7px;}
     .em{text-align:center;color:var(--muted);font-size:12px;padding:11px 0;font-family:'Space Mono',monospace;}
-    ::-webkit-scrollbar{width:4px;} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+    ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
   </style>
 </head>
 <body>
 
-<!-- camera background -->
-<video id="cam" autoplay playsinline muted></video>
-
-<!-- three.js draws boxes here — transparent background -->
 <canvas id="c"></canvas>
 
 <!-- splash -->
 <div id="splash">
   <div class="logo-big">سعة <span>·</span></div>
   <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--blue);letter-spacing:2px">AR SPACE ORGANIZER</div>
-  <div class="tagline">Place virtual boxes in your real space. See what fits before you pack.</div>
+  <div class="tagline">Point at any surface. The grid snaps to it. Place boxes to see what fits.</div>
+  <div id="nosupport">⚠️ WebXR AR not supported on this browser.<br/>Please use <strong>Chrome on Android</strong> for the full AR experience.</div>
   <div class="steps">
     <h3>How to use</h3>
-    <div class="step"><div class="sn">1</div><div>Tap <strong>Start</strong> and allow camera</div></div>
-    <div class="step"><div class="sn">2</div><div>Point camera at the floor or your space</div></div>
-    <div class="step"><div class="sn">3</div><div>Enter object name and size then tap <strong>Place</strong></div></div>
-    <div class="step"><div class="sn">4</div><div>Drag boxes around to organize them</div></div>
+    <div class="step"><div class="sn">1</div><div>Tap <strong>Start AR</strong> — allow camera</div></div>
+    <div class="step"><div class="sn">2</div><div>Move camera over a surface — grid snaps to it</div></div>
+    <div class="step"><div class="sn">3</div><div>Enter object details → tap to place on surface</div></div>
+    <div class="step"><div class="sn">4</div><div>Drag placed boxes to rearrange them</div></div>
   </div>
-  <button class="btn-start" onclick="startApp()">Start AR →</button>
+  <button class="btn-start" id="startBtn" onclick="startAR()">Start AR →</button>
 </div>
 
-<!-- UI -->
+<!-- UI overlay -->
 <div id="ui">
   <div class="topbar">
     <div class="logo">سعة <em>·</em> Sa'ah</div>
     <div id="capBadge">0 objects</div>
   </div>
 
-  <button id="placeBtn" onclick="placeObj()">👆 Tap to place object</button>
-  <div id="dragHint">✋ Tap a box to select · Drag to move</div>
+  <div id="scanHint">
+    <div class="ring"></div>
+    <div class="pill">Move camera over a flat surface</div>
+  </div>
+
+  <div id="surfaceInfo">
+    <h4>Surface Detected</h4>
+    <div id="surfaceSize" style="color:var(--green);font-size:13px;">Scanning...</div>
+  </div>
+
+  <button id="placeBtn" onclick="placeObject()">👆 Tap to place object here</button>
+  <div id="dragHint">✋ Tap a box · Drag to move</div>
 
   <div id="fitPanel">
     <h4>Fit Analysis</h4>
@@ -169,347 +180,352 @@
 
 <script>
 // ══════════════════════════════════════
-// THREE.JS SETUP
-// Transparent canvas on top of camera video
+// THREE.JS + WEBXR SETUP
 // ══════════════════════════════════════
 const canvas   = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x000000, 0); // fully transparent
+renderer.xr.enabled = true; // enable WebXR
 
 const scene  = new THREE.Scene();
-
-// perspective camera matching typical phone FOV
-const cam = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-cam.position.set(0, 1.6, 2); // eye level, looking at the grid
-cam.lookAt(0, 0, 0);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const dl = new THREE.DirectionalLight(0xffffff, 0.5);
-dl.position.set(2, 5, 2);
+dl.position.set(1, 3, 2);
 scene.add(dl);
 
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
-  cam.aspect = window.innerWidth/window.innerHeight;
-  cam.updateProjectionMatrix();
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
 });
 
-// ── STABLE FLAT GRID ──
-// Fixed flat on the lower portion of the screen
-// looks natural like it's lying on the floor
+// ── RETICLE (follows the detected surface) ──
+const reticle = new THREE.Mesh(
+  new THREE.RingGeometry(0.06, 0.085, 32).rotateX(-Math.PI/2),
+  new THREE.MeshBasicMaterial({ color:0x4A9EFF, opacity:0.9, transparent:true, side:THREE.DoubleSide })
+);
+reticle.matrixAutoUpdate = false;
+reticle.visible = false;
+scene.add(reticle);
+
+// ── GRID (snaps to detected surface) ──
 const gridGroup = new THREE.Group();
-gridGroup.position.set(0, -0.8, -1.5);
-gridGroup.rotation.x = -Math.PI / 2.8; // fixed natural floor angle
 scene.add(gridGroup);
 
-const grid = new THREE.GridHelper(3, 12, 0x4A9EFF, 0x1E3A5F);
-grid.material.transparent = true;
-grid.material.opacity = 0.6;
-gridGroup.add(grid);
+const gridMesh = new THREE.GridHelper(2, 10, 0x4A9EFF, 0x1E3A5F);
+gridMesh.material.transparent = true;
+gridMesh.material.opacity = 0.6;
+gridMesh.visible = false;
+gridGroup.add(gridMesh);
 
 const floorMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(3, 3),
-  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.25, side:THREE.DoubleSide })
+  new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI/2),
+  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.28, side:THREE.DoubleSide })
 );
-floorMesh.rotation.x = -Math.PI/2;
+floorMesh.visible = false;
 gridGroup.add(floorMesh);
 
-// dimension labels using canvas textures
-function makeLabel(text, color) {
-  const cv = document.createElement('canvas');
-  cv.width = 256; cv.height = 64;
-  const ctx = cv.getContext('2d');
-  ctx.fillStyle = 'transparent';
-  ctx.clearRect(0, 0, 256, 64);
-  ctx.font = 'bold 28px Space Mono, monospace';
-  ctx.fillStyle = color;
-  ctx.textAlign = 'center';
-  ctx.fillText(text, 128, 42);
-  const tex = new THREE.CanvasTexture(cv);
-  const mat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, side:THREE.DoubleSide });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.2), mat);
-  return { mesh, tex, cv, ctx };
-}
-
-// width label at the front of the grid
-const wLabel = makeLabel('← 3m →', '#4A9EFF');
-wLabel.mesh.position.set(0, 0.01, 1.6);
-wLabel.mesh.rotation.x = -Math.PI/2;
-gridGroup.add(wLabel.mesh);
-
-// depth label on the side
-const dLabel = makeLabel('← 3m →', '#FF8C42');
-dLabel.mesh.position.set(1.6, 0.01, 0);
-dLabel.mesh.rotation.x = -Math.PI/2;
-dLabel.mesh.rotation.z = -Math.PI/2;
-gridGroup.add(dLabel.mesh);
-
-// update labels when space size changes
-function updateGridLabels() {
-  const w = S.space.w; const d = S.space.d;
-  wLabel.ctx.clearRect(0, 0, 256, 64);
-  wLabel.ctx.font = 'bold 28px monospace';
-  wLabel.ctx.fillStyle = '#4A9EFF';
-  wLabel.ctx.textAlign = 'center';
-  wLabel.ctx.fillText(`← ${w}cm →`, 128, 42);
-  wLabel.tex.needsUpdate = true;
-
-  dLabel.ctx.clearRect(0, 0, 256, 64);
-  dLabel.ctx.font = 'bold 28px monospace';
-  dLabel.ctx.fillStyle = '#FF8C42';
-  dLabel.ctx.textAlign = 'center';
-  dLabel.ctx.fillText(`← ${d}cm →`, 128, 42);
-  dLabel.tex.needsUpdate = true;
-}
-
-// render loop
-function animate() {
-  requestAnimationFrame(animate);
-  renderer.render(scene, cam);
-}
-animate();
-
-// ══════════════════════════════════════
-// APP STATE
-// ══════════════════════════════════════
+// ── APP STATE ──
 const S = {
-  objects:   [],
-  selId:     null,
-  nextId:    1,
-  color:     '#4A9EFF',
-  queued:    null,
-  space:     { w:120, d:100, h:80 },
-  colors:    ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
-
-  // dragging state
-  dragging:  false,
-  dragId:    null,
-  lastTX:    0,
-  lastTY:    0,
+  objects:[], selId:null, nextId:1,
+  color:'#4A9EFF', queued:null,
+  hitPos:null, floorY:0,
+  surfaceW:0, surfaceD:0, // estimated surface size
+  space:{ w:120, d:100, h:80 },
+  colors:['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
+  dragging:false, dragId:null, lastTX:0, lastTY:0,
 };
 
-const CM = 0.01; // 1cm = 0.01 Three.js units
+const CM = 0.01;
 
-// grid of positions where boxes appear — spread nicely on the floor grid
-const SLOTS = [
-  new THREE.Vector3(-0.8, 0, -0.5),
-  new THREE.Vector3( 0,   0, -0.5),
-  new THREE.Vector3( 0.8, 0, -0.5),
-  new THREE.Vector3(-0.8, 0,  0.2),
-  new THREE.Vector3( 0,   0,  0.2),
-  new THREE.Vector3( 0.8, 0,  0.2),
-  new THREE.Vector3(-0.8, 0,  0.9),
-  new THREE.Vector3( 0,   0,  0.9),
-  new THREE.Vector3( 0.8, 0,  0.9),
-];
+// track hit positions to estimate surface size
+let hitPositions = [];
 
 // ══════════════════════════════════════
-// START APP — open camera
+// CHECK WEBXR SUPPORT
 // ══════════════════════════════════════
-async function startApp() {
+async function checkSupport() {
+  if (!navigator.xr) {
+    document.getElementById('nosupport').style.display = 'block';
+    document.getElementById('startBtn').style.opacity = '0.4';
+    document.getElementById('startBtn').textContent = 'Not supported on this browser';
+    return false;
+  }
+  const ok = await navigator.xr.isSessionSupported('immersive-ar');
+  if (!ok) {
+    document.getElementById('nosupport').style.display = 'block';
+    document.getElementById('startBtn').style.opacity = '0.4';
+    document.getElementById('startBtn').textContent = 'AR not supported on this device';
+    return false;
+  }
+  return true;
+}
+checkSupport();
+
+// ══════════════════════════════════════
+// START AR SESSION
+// ══════════════════════════════════════
+async function startAR() {
+  if (!navigator.xr) return;
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } }
+    const session = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['hit-test'],
+      optionalFeatures: ['dom-overlay'],
+      domOverlay: { root: document.getElementById('ui') },
     });
-    const vid = document.getElementById('cam');
-    vid.srcObject = stream;
-    vid.onloadedmetadata = () => {
-      document.getElementById('splash').style.display = 'none';
-      document.getElementById('ui').style.display     = 'flex';
-    };
+
+    renderer.xr.setReferenceSpaceType('local');
+    await renderer.xr.setSession(session);
+
+    // show UI, hide splash
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('ui').style.display     = 'flex';
+
+    // handle screen tap in AR — places queued object
+    session.addEventListener('select', () => {
+      if (S.queued && S.hitPos) placeObject();
+    });
+
+    let hitSource = null;
+    let hitInited = false;
+
+    // render loop
+    renderer.setAnimationLoop((time, frame) => {
+      if (!frame) return;
+
+      const refSpace = renderer.xr.getReferenceSpace();
+
+      // init hit test on first frame
+      if (!hitInited) {
+        session.requestReferenceSpace('viewer').then(vs => {
+          session.requestHitTestSource({ space:vs }).then(src => { hitSource = src; });
+        });
+        hitInited = true;
+      }
+
+      if (hitSource) {
+        const hits = frame.getHitTestResults(hitSource);
+
+        if (hits.length > 0) {
+          const pose = hits[0].getPose(refSpace);
+          if (pose) {
+            // update reticle
+            reticle.visible = true;
+            reticle.matrix.fromArray(pose.transform.matrix);
+
+            // get world hit position
+            const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+            S.hitPos  = p.clone();
+            S.floorY  = p.y;
+
+            // move grid to this surface position
+            gridGroup.position.copy(p);
+
+            // rotate grid to match surface normal
+            const m  = new THREE.Matrix4().fromArray(pose.transform.matrix);
+            const quat = new THREE.Quaternion().setFromRotationMatrix(m);
+            gridGroup.quaternion.copy(quat);
+
+            gridMesh.visible  = true;
+            floorMesh.visible = true;
+
+            // track positions to estimate surface area
+            hitPositions.push(p.clone());
+            if (hitPositions.length > 30) hitPositions.shift();
+            estimateSurface();
+
+            // hide scan hint
+            document.getElementById('scanHint').style.opacity = '0';
+            document.getElementById('surfaceInfo').style.display = 'block';
+
+            if (S.queued) document.getElementById('placeBtn').style.display = 'block';
+            if (S.objects.length > 0) document.getElementById('dragHint').style.display = 'block';
+
+          }
+        } else {
+          reticle.visible = false;
+          document.getElementById('scanHint').style.opacity = '1';
+          document.getElementById('placeBtn').style.display = 'none';
+        }
+      }
+
+      renderer.render(scene, camera);
+    });
+
   } catch(e) {
-    alert('Camera permission required! Please allow camera access.');
+    alert('Could not start AR: ' + e.message + '\n\nMake sure you are using Chrome on Android.');
   }
 }
 
 // ══════════════════════════════════════
+// ESTIMATE SURFACE SIZE
+// Based on how far the reticle moves across the surface
+// gives an estimate of the surface dimensions
+// ══════════════════════════════════════
+function estimateSurface() {
+  if (hitPositions.length < 2) return;
+
+  let minX=Infinity,maxX=-Infinity,minZ=Infinity,maxZ=-Infinity;
+  hitPositions.forEach(p => {
+    minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x);
+    minZ=Math.min(minZ,p.z); maxZ=Math.max(maxZ,p.z);
+  });
+
+  // convert to cm (1 meter = 100cm)
+  const w = Math.round((maxX-minX)*100);
+  const d = Math.round((maxZ-minZ)*100);
+
+  // only show if we have a meaningful size
+  if (w > 5 || d > 5) {
+    const el = document.getElementById('surfaceSize');
+    el.textContent = `~${Math.max(w,20)}cm × ${Math.max(d,20)}cm`;
+  }
+}
+
+// ══════════════════════════════════════
+// QUEUE OBJECT
+// ══════════════════════════════════════
+function queueObj() {
+  const name=document.getElementById('oN').value.trim()||'Box';
+  const w=parseFloat(document.getElementById('oW').value);
+  const d=parseFloat(document.getElementById('oD').value);
+  const h=parseFloat(document.getElementById('oH').value);
+  if (!w||!d||!h){alert('Please enter W, D, and H!');return;}
+  S.queued={name,w,d,h,color:S.color};
+  const btn=document.getElementById('placeBtn');
+  btn.textContent=`👆 Tap surface to place "${name}"`;
+  if (S.hitPos) btn.style.display='block';
+}
+
+// ══════════════════════════════════════
+// PLACE OBJECT on the detected surface
+// ══════════════════════════════════════
+function placeObject() {
+  if (!S.queued||!S.hitPos) return;
+  const obj=S.queued; const id=S.nextId++;
+  S.objects.push({id,...obj}); S.queued=null;
+
+  const aw=obj.w*CM; const ad=obj.d*CM; const ah=obj.h*CM;
+  const geo=new THREE.BoxGeometry(aw,ah,ad);
+
+  const mat=new THREE.MeshPhongMaterial({color:new THREE.Color(obj.color),transparent:true,opacity:0.72});
+  const solid=new THREE.Mesh(geo,mat);
+
+  const wmat=new THREE.MeshBasicMaterial({color:new THREE.Color(obj.color),wireframe:true});
+  const wire=new THREE.Mesh(geo,wmat);
+
+  const group=new THREE.Group();
+  group.name='obj-'+id;
+  group.userData={id,ah};
+
+  // place at hit position, offset slightly so objects don't stack
+  const offset=(S.objects.length-1)*0.05;
+  group.position.set(
+    S.hitPos.x + (offset%0.3)-0.15,
+    S.floorY+ah/2,
+    S.hitPos.z
+  );
+
+  group.add(solid); group.add(wire);
+  scene.add(group);
+
+  document.getElementById('oN').value='';
+  document.getElementById('oW').value='';
+  document.getElementById('oD').value='';
+  document.getElementById('oH').value='';
+  document.getElementById('placeBtn').style.display='none';
+  document.getElementById('dragHint').style.display='block';
+
+  renderList(); updFit();
+}
+
+// ══════════════════════════════════════
+// TOUCH DRAG TO MOVE BOXES
+// ══════════════════════════════════════
+const raycaster=new THREE.Raycaster();
+function ndcFromTouch(t){ return new THREE.Vector2((t.clientX/window.innerWidth)*2-1,(t.clientY/window.innerHeight)*-2+1); }
+
+canvas.addEventListener('touchstart',e=>{
+  if(e.touches.length!==1) return;
+  const t=e.touches[0];
+  raycaster.setFromCamera(ndcFromTouch(t),camera);
+  const meshes=[];
+  S.objects.forEach(o=>{const g=scene.getObjectByName('obj-'+o.id);if(g)g.children.forEach(c=>meshes.push(c));});
+  const hits=raycaster.intersectObjects(meshes,false);
+  if(hits.length>0){
+    let obj=hits[0].object.parent;
+    if(obj&&obj.userData.id){
+      S.dragging=true; S.dragId=obj.userData.id; S.selId=obj.userData.id;
+      S.lastTX=t.clientX; S.lastTY=t.clientY;
+      renderList(); e.preventDefault();
+    }
+  }
+},{passive:false});
+
+canvas.addEventListener('touchmove',e=>{
+  if(!S.dragging||!S.dragId) return;
+  e.preventDefault();
+  const t=e.touches[0];
+  const group=scene.getObjectByName('obj-'+S.dragId);
+  if(!group) return;
+  const dx=(t.clientX-S.lastTX)*0.003;
+  const dz=(t.clientY-S.lastTY)*0.003;
+  group.position.x+=dx;
+  group.position.z+=dz;
+  group.position.y=S.floorY+group.userData.ah/2;
+  S.lastTX=t.clientX; S.lastTY=t.clientY;
+},{passive:false});
+
+canvas.addEventListener('touchend',()=>{S.dragging=false;S.dragId=null;});
+
+// ══════════════════════════════════════
 // COLOR SWATCHES
 // ══════════════════════════════════════
-function buildSwatches() {
-  const row = document.getElementById('sr');
-  S.colors.forEach(c => {
-    const d = document.createElement('div');
-    d.className = 'dot' + (c===S.color?' sel':'');
-    d.style.background = c;
-    d.onclick = () => { document.querySelectorAll('.dot').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); S.color=c; };
+function buildSwatches(){
+  const row=document.getElementById('sr');
+  S.colors.forEach(c=>{
+    const d=document.createElement('div');
+    d.className='dot'+(c===S.color?' sel':'');
+    d.style.background=c;
+    d.onclick=()=>{document.querySelectorAll('.dot').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');S.color=c;};
     row.appendChild(d);
   });
 }
 buildSwatches();
 
-// ══════════════════════════════════════
-// TABS
-// ══════════════════════════════════════
-function st(name, btn) {
+function st(name,btn){
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
 }
 
-// ══════════════════════════════════════
-// SPACE PRESETS
-// ══════════════════════════════════════
-function sp(w,d,h) { document.getElementById('sW').value=w; document.getElementById('sD').value=d; document.getElementById('sH').value=h; apSp(); }
-function apSp() { S.space.w=+document.getElementById('sW').value||120; S.space.d=+document.getElementById('sD').value||100; S.space.h=+document.getElementById('sH').value||80; updFit(); updateGridLabels(); }
+function sp(w,d,h){document.getElementById('sW').value=w;document.getElementById('sD').value=d;document.getElementById('sH').value=h;apSp();}
+function apSp(){S.space.w=+document.getElementById('sW').value||120;S.space.d=+document.getElementById('sD').value||100;S.space.h=+document.getElementById('sH').value||80;updFit();}
 
-// ══════════════════════════════════════
-// QUEUE OBJECT
-// ══════════════════════════════════════
-function queueObj() {
-  const name = document.getElementById('oN').value.trim() || 'Box';
-  const w    = parseFloat(document.getElementById('oW').value);
-  const d    = parseFloat(document.getElementById('oD').value);
-  const h    = parseFloat(document.getElementById('oH').value);
-  if (!w||!d||!h) { alert('Please enter W, D, and H!'); return; }
-  S.queued = { name, w, d, h, color:S.color };
-  const btn = document.getElementById('placeBtn');
-  btn.style.display = 'block';
-  btn.textContent   = `👆 Tap to place "${name}"`;
-  document.getElementById('dragHint').style.display = 'none';
-}
-
-// ══════════════════════════════════════
-// PLACE OBJECT
-// ══════════════════════════════════════
-function placeObj() {
-  if (!S.queued) return;
-  const obj  = S.queued;
-  const id   = S.nextId++;
-  const idx  = S.objects.length % SLOTS.length;
-
-  // convert cm to three.js units and scale down to fit grid
-  const aw = obj.w * CM;
-  const ad = obj.d * CM;
-  const ah = obj.h * CM;
-
-  // solid box
-  const geo  = new THREE.BoxGeometry(aw, ah, ad);
-  const mat  = new THREE.MeshPhongMaterial({ color:new THREE.Color(obj.color), transparent:true, opacity:0.72 });
-  const mesh = new THREE.Mesh(geo, mat);
-
-  // wireframe
-  const wmat = new THREE.MeshBasicMaterial({ color:new THREE.Color(obj.color), wireframe:true });
-  const wire = new THREE.Mesh(geo, wmat);
-
-  const group = new THREE.Group();
-  group.name  = 'obj-'+id;
-  group.userData = { id, h:ah };
-
-  // place on grid slot, inside gridGroup local space
-  const slot = SLOTS[idx];
-  group.position.set(slot.x, ah/2, slot.z);
-
-  group.add(mesh);
-  group.add(wire);
-  gridGroup.add(group); // add to gridGroup so it sits on the grid
-
-  S.objects.push({ id, ...obj });
-  S.queued = null;
-
-  document.getElementById('oN').value = '';
-  document.getElementById('oW').value = '';
-  document.getElementById('oD').value = '';
-  document.getElementById('oH').value = '';
-  document.getElementById('placeBtn').style.display = 'none';
-  document.getElementById('dragHint').style.display = 'block';
-
-  renderList();
-  updFit();
-}
-
-// ══════════════════════════════════════
-// TOUCH DRAG TO MOVE BOXES
-// ══════════════════════════════════════
-const raycaster = new THREE.Raycaster();
-
-function ndcFromTouch(t) {
-  return new THREE.Vector2(
-    (t.clientX / window.innerWidth)  *  2 - 1,
-    (t.clientY / window.innerHeight) * -2 + 1
-  );
-}
-
-canvas.style.pointerEvents = 'all'; // enable touch on canvas
-
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length !== 1) return;
-  const t = e.touches[0];
-  raycaster.setFromCamera(ndcFromTouch(t), cam);
-
-  // get all meshes inside gridGroup
-  const meshes = [];
-  gridGroup.traverse(child => { if (child.isMesh && child.parent.userData.id) meshes.push(child); });
-  const hits = raycaster.intersectObjects(meshes, false);
-
-  if (hits.length > 0) {
-    let obj = hits[0].object;
-    while (obj.parent && !obj.parent.userData.id) obj = obj.parent;
-    const grp = obj.parent;
-    if (grp && grp.userData.id) {
-      S.dragging = true;
-      S.dragId   = grp.userData.id;
-      S.selId    = grp.userData.id;
-      S.lastTX   = t.clientX;
-      S.lastTY   = t.clientY;
-      renderList();
-      e.preventDefault();
-    }
-  }
-}, { passive:false });
-
-canvas.addEventListener('touchmove', e => {
-  if (!S.dragging || !S.dragId) return;
-  e.preventDefault();
-  const t = e.touches[0];
-
-  const group = gridGroup.getObjectByName('obj-'+S.dragId);
-  if (!group) return;
-
-  // move box based on finger drag delta
-  const dx = (t.clientX - S.lastTX) * 0.004;
-  const dz = (t.clientY - S.lastTY) * 0.004;
-
-  group.position.x += dx;
-  group.position.z += dz;
-
-  // keep box sitting on the grid floor
-  group.position.y = group.userData.h / 2;
-
-  S.lastTX = t.clientX;
-  S.lastTY = t.clientY;
-}, { passive:false });
-
-canvas.addEventListener('touchend', () => { S.dragging=false; S.dragId=null; });
-
-// ══════════════════════════════════════
-// SELECT / REMOVE
-// ══════════════════════════════════════
-function selObj(id) { S.selId=id; renderList(); }
-function rmSel() { if (!S.selId){alert('Select an object first!');return;} rmById(S.selId); }
-function rmById(id) {
-  const g = gridGroup.getObjectByName('obj-'+id);
-  if (g) gridGroup.remove(g);
+function selObj(id){S.selId=id;renderList();}
+function rmSel(){if(!S.selId){alert('Select an object first!');return;}rmById(S.selId);}
+function rmById(id){
+  const g=scene.getObjectByName('obj-'+id);if(g) scene.remove(g);
   S.objects=S.objects.filter(o=>o.id!==id);
-  if (S.selId===id) S.selId=null;
-  renderList(); updFit();
+  if(S.selId===id) S.selId=null;
+  renderList();updFit();
 }
-function clrAll() {
-  if (!S.objects.length) return;
-  if (!confirm('Remove all objects?')) return;
-  S.objects.forEach(o=>{ const g=gridGroup.getObjectByName('obj-'+o.id); if(g) gridGroup.remove(g); });
-  S.objects=[]; S.selId=null; renderList(); updFit();
+function clrAll(){
+  if(!S.objects.length) return;
+  if(!confirm('Remove all objects?')) return;
+  S.objects.forEach(o=>{const g=scene.getObjectByName('obj-'+o.id);if(g) scene.remove(g);});
+  S.objects=[];S.selId=null;renderList();updFit();
 }
 
-// ══════════════════════════════════════
-// RENDER LIST
-// ══════════════════════════════════════
-function renderList() {
+function renderList(){
   const list=document.getElementById('ol');
   document.getElementById('capBadge').textContent=S.objects.length+' object'+(S.objects.length!==1?'s':'');
-  if (!S.objects.length){list.innerHTML='<div class="em">No objects placed yet!</div>';return;}
+  if(!S.objects.length){list.innerHTML='<div class="em">No objects placed yet!</div>';return;}
   list.innerHTML='';
   S.objects.forEach(o=>{
     const c=document.createElement('div');
@@ -520,17 +536,14 @@ function renderList() {
   });
 }
 
-// ══════════════════════════════════════
-// FIT ANALYSIS
-// ══════════════════════════════════════
-function updFit() {
+function updFit(){
   const sv=S.space.w*S.space.d*S.space.h;
   const uv=S.objects.reduce((s,o)=>s+o.w*o.d*o.h,0);
   const pct=Math.min(100,Math.round((uv/sv)*100));
   const el=document.getElementById('fs');
-  if (!S.objects.length){el.className='ok';el.textContent='Add objects to start';return;}
-  if (pct<60){el.className='ok';el.textContent=`✓ ${pct}% full — fits!`;}
-  else if (pct<85){el.className='warn';el.textContent=`⚠ ${pct}% — getting tight`;}
+  if(!S.objects.length){el.className='ok';el.textContent='Add objects to start';return;}
+  if(pct<60){el.className='ok';el.textContent=`✓ ${pct}% full — fits!`;}
+  else if(pct<85){el.className='warn';el.textContent=`⚠ ${pct}% — getting tight`;}
   else{el.className='bad';el.textContent=`✗ ${pct}% — won't fit!`;}
 }
 </script>
