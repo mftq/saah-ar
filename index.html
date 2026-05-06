@@ -196,11 +196,12 @@ window.addEventListener('resize', () => {
   cam.updateProjectionMatrix();
 });
 
-// ── GRID on the floor ──
-// positioned in the center of view, tilted to look like it's on the floor
+// ── DYNAMIC GRID using device orientation ──
+// The grid tilts based on how you hold the phone
+// so it always appears to lie flat on whatever surface you point at
 const gridGroup = new THREE.Group();
-gridGroup.rotation.x = -Math.PI / 6; // tilt to simulate floor perspective
 gridGroup.position.set(0, -0.5, -1);
+scene.add(gridGroup);
 
 const grid = new THREE.GridHelper(3, 12, 0x4A9EFF, 0x1E3A5F);
 grid.material.transparent = true;
@@ -215,7 +216,40 @@ floorMesh.rotation.x = -Math.PI/2;
 floorMesh.position.y = -0.001;
 gridGroup.add(floorMesh);
 
-scene.add(gridGroup);
+// listen to device tilt and rotate the grid to match
+// this makes the grid look like it's always on the floor
+let gyroEnabled = false;
+
+function requestGyro() {
+  // iOS requires permission
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(state => {
+      if (state === 'granted') startGyro();
+    }).catch(() => {});
+  } else {
+    startGyro();
+  }
+}
+
+function startGyro() {
+  window.addEventListener('deviceorientation', e => {
+    if (!e.beta && !e.gamma) return;
+    gyroEnabled = true;
+
+    // beta = phone tilt forward/back (0=flat, 90=upright)
+    // gamma = phone tilt left/right
+    const beta  = THREE.MathUtils.degToRad(e.beta  || 0);
+    const gamma = THREE.MathUtils.degToRad(e.gamma || 0);
+
+    // rotate grid opposite to phone tilt so it stays "on the floor"
+    // when phone is upright (beta~90), grid tilts ~90deg back to lie flat
+    gridGroup.rotation.x = beta - Math.PI/2;
+    gridGroup.rotation.z = -gamma;
+  });
+}
+
+// start gyro when app starts
+requestGyro();
 
 // render loop
 function animate() {
