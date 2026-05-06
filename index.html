@@ -196,60 +196,73 @@ window.addEventListener('resize', () => {
   cam.updateProjectionMatrix();
 });
 
-// ── DYNAMIC GRID using device orientation ──
-// The grid tilts based on how you hold the phone
-// so it always appears to lie flat on whatever surface you point at
+// ── STABLE FLAT GRID ──
+// Fixed flat on the lower portion of the screen
+// looks natural like it's lying on the floor
 const gridGroup = new THREE.Group();
-gridGroup.position.set(0, -0.5, -1);
+gridGroup.position.set(0, -0.8, -1.5);
+gridGroup.rotation.x = -Math.PI / 2.8; // fixed natural floor angle
 scene.add(gridGroup);
 
 const grid = new THREE.GridHelper(3, 12, 0x4A9EFF, 0x1E3A5F);
 grid.material.transparent = true;
-grid.material.opacity = 0.55;
+grid.material.opacity = 0.6;
 gridGroup.add(grid);
 
 const floorMesh = new THREE.Mesh(
   new THREE.PlaneGeometry(3, 3),
-  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.3, side:THREE.DoubleSide })
+  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.25, side:THREE.DoubleSide })
 );
 floorMesh.rotation.x = -Math.PI/2;
-floorMesh.position.y = -0.001;
 gridGroup.add(floorMesh);
 
-// listen to device tilt and rotate the grid to match
-// this makes the grid look like it's always on the floor
-let gyroEnabled = false;
-
-function requestGyro() {
-  // iOS requires permission
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(state => {
-      if (state === 'granted') startGyro();
-    }).catch(() => {});
-  } else {
-    startGyro();
-  }
+// dimension labels using canvas textures
+function makeLabel(text, color) {
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 64;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = 'transparent';
+  ctx.clearRect(0, 0, 256, 64);
+  ctx.font = 'bold 28px Space Mono, monospace';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, 128, 42);
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.MeshBasicMaterial({ map:tex, transparent:true, side:THREE.DoubleSide });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.2), mat);
+  return { mesh, tex, cv, ctx };
 }
 
-function startGyro() {
-  window.addEventListener('deviceorientation', e => {
-    if (!e.beta && !e.gamma) return;
-    gyroEnabled = true;
+// width label at the front of the grid
+const wLabel = makeLabel('← 3m →', '#4A9EFF');
+wLabel.mesh.position.set(0, 0.01, 1.6);
+wLabel.mesh.rotation.x = -Math.PI/2;
+gridGroup.add(wLabel.mesh);
 
-    // beta = phone tilt forward/back (0=flat, 90=upright)
-    // gamma = phone tilt left/right
-    const beta  = THREE.MathUtils.degToRad(e.beta  || 0);
-    const gamma = THREE.MathUtils.degToRad(e.gamma || 0);
+// depth label on the side
+const dLabel = makeLabel('← 3m →', '#FF8C42');
+dLabel.mesh.position.set(1.6, 0.01, 0);
+dLabel.mesh.rotation.x = -Math.PI/2;
+dLabel.mesh.rotation.z = -Math.PI/2;
+gridGroup.add(dLabel.mesh);
 
-    // rotate grid opposite to phone tilt so it stays "on the floor"
-    // when phone is upright (beta~90), grid tilts ~90deg back to lie flat
-    gridGroup.rotation.x = beta - Math.PI/2;
-    gridGroup.rotation.z = -gamma;
-  });
+// update labels when space size changes
+function updateGridLabels() {
+  const w = S.space.w; const d = S.space.d;
+  wLabel.ctx.clearRect(0, 0, 256, 64);
+  wLabel.ctx.font = 'bold 28px monospace';
+  wLabel.ctx.fillStyle = '#4A9EFF';
+  wLabel.ctx.textAlign = 'center';
+  wLabel.ctx.fillText(`← ${w}cm →`, 128, 42);
+  wLabel.tex.needsUpdate = true;
+
+  dLabel.ctx.clearRect(0, 0, 256, 64);
+  dLabel.ctx.font = 'bold 28px monospace';
+  dLabel.ctx.fillStyle = '#FF8C42';
+  dLabel.ctx.textAlign = 'center';
+  dLabel.ctx.fillText(`← ${d}cm →`, 128, 42);
+  dLabel.tex.needsUpdate = true;
 }
-
-// start gyro when app starts
-requestGyro();
 
 // render loop
 function animate() {
@@ -340,7 +353,7 @@ function st(name, btn) {
 // SPACE PRESETS
 // ══════════════════════════════════════
 function sp(w,d,h) { document.getElementById('sW').value=w; document.getElementById('sD').value=d; document.getElementById('sH').value=h; apSp(); }
-function apSp() { S.space.w=+document.getElementById('sW').value||120; S.space.d=+document.getElementById('sD').value||100; S.space.h=+document.getElementById('sH').value||80; updFit(); }
+function apSp() { S.space.w=+document.getElementById('sW').value||120; S.space.d=+document.getElementById('sD').value||100; S.space.h=+document.getElementById('sH').value||80; updFit(); updateGridLabels(); }
 
 // ══════════════════════════════════════
 // QUEUE OBJECT
