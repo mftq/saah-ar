@@ -148,9 +148,9 @@ renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
 
-// camera matches how you'd hold phone pointing at floor of car boot
+// camera looks straight forward
 const cam = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-cam.position.set(0, 3.5, 3);
+cam.position.set(0, 0, 0);
 cam.lookAt(0, 0, -1);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
@@ -164,22 +164,44 @@ window.addEventListener('resize', () => {
   cam.updateProjectionMatrix();
 });
 
-// grid sits flat further away, larger, lower — matches prototype look
+// grid centered in front of camera, small enough to not fill screen
 const gridGroup = new THREE.Group();
-gridGroup.position.set(0, -1.2, -2); // push further down and away
+gridGroup.position.set(0, 0, -2); // 2 units in front of camera = center of screen
 scene.add(gridGroup);
 
-const grid = new THREE.GridHelper(5, 16, 0x4A9EFF, 0x1E3A5F);
+const grid = new THREE.GridHelper(1.4, 10, 0x4A9EFF, 0x1E3A5F);
 grid.material.transparent = true;
-grid.material.opacity = 0.55;
+grid.material.opacity = 0.6;
 gridGroup.add(grid);
 
 const floorMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(5, 5),
+  new THREE.PlaneGeometry(1.4, 1.4),
   new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.22, side:THREE.DoubleSide })
 );
 floorMesh.rotation.x = -Math.PI/2;
 gridGroup.add(floorMesh);
+
+// gyroscope — rotate the grid based on phone tilt
+// so grid always faces whatever surface you point at
+function startGyro() {
+  window.addEventListener('deviceorientation', e => {
+    if (!e.beta) return;
+    // beta=0 means phone flat, beta=90 means phone upright
+    // we rotate grid X axis to compensate so it always looks flat on surface
+    const b = THREE.MathUtils.degToRad(e.beta  || 0);
+    const g = THREE.MathUtils.degToRad(e.gamma || 0);
+    gridGroup.rotation.x = b - Math.PI / 2;
+    gridGroup.rotation.z = -g;
+  });
+}
+
+// iOS needs permission for gyro
+if (typeof DeviceOrientationEvent !== 'undefined' &&
+    typeof DeviceOrientationEvent.requestPermission === 'function') {
+  DeviceOrientationEvent.requestPermission().then(s => { if (s==='granted') startGyro(); }).catch(()=>{});
+} else {
+  startGyro();
+}
 
 // render loop
 function animate() { requestAnimationFrame(animate); renderer.render(scene, cam); }
