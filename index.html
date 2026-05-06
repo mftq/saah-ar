@@ -2,575 +2,789 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content"/>
-  <title>سعة — AR Space Organizer</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet"/>
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"/>
+  <title>ARuler — AR Space Measurer</title>
+
+  <!--
+    HOW THIS WORKS:
+    The Hiro marker has a known real-world size (we calibrate it as 15cm).
+    AR.js tells us where the marker is in 3D space and its scale.
+    We use that to calculate real distances and display them as floating labels.
+    The user can tap to set measurement points and get distances between them.
+  -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
-      --blue: #4A9EFF; --orange: #FF8C42; --green: #4ade80;
-      --red: #f87171; --yellow: #facc15;
-      --bg: rgba(8,12,24,0.92); --border: rgba(74,158,255,0.2);
-      --text: #E8F0FF; --muted: #4A6080;
+      --blue:   #4A9EFF;
+      --orange: #FF8C42;
+      --green:  #4ade80;
+      --red:    #f87171;
+      --yellow: #facc15;
+      --purple: #a78bfa;
+      --bg:     rgba(8,12,24,0.92);
+      --border: rgba(74,158,255,0.2);
+      --text:   #E8F0FF;
+      --muted:  #4A6080;
     }
-    html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', sans-serif; background: #000; color: var(--text); }
 
-    /* webxr canvas fills screen */
-    #c { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; display: none; }
+    html, body { overflow: hidden; width: 100%; height: 100%; font-family: 'DM Sans', sans-serif; background: #000; color: var(--text); }
 
-    /* splash */
-    #splash { position: fixed; inset: 0; background: #080C18; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 28px; text-align: center; }
-    .logo-big { font-family: 'Space Mono', monospace; font-size: 52px; color: var(--blue); }
-    .logo-big span { color: var(--orange); }
-    .tagline { font-size: 13px; color: var(--muted); max-width: 260px; line-height: 1.6; }
-    .steps { background: rgba(74,158,255,0.05); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; text-align: left; width: 100%; max-width: 300px; }
-    .steps h3 { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-    .step { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 7px; font-size: 13px; line-height: 1.4; }
-    .sn { width: 20px; height: 20px; border-radius: 50%; background: rgba(74,158,255,0.15); border: 1px solid var(--blue); color: var(--blue); font-family: 'Space Mono', monospace; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .btn-start { width: 100%; max-width: 300px; background: var(--blue); color: white; border: none; border-radius: 13px; padding: 15px; font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer; }
-    #iosWarn { display: none; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 12px; padding: 14px; font-size: 13px; color: var(--red); line-height: 1.5; max-width: 300px; }
+    /* ── UI overlay on top of AR ── */
+    #ui {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
 
-    /* UI overlay */
-    #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: none; flex-direction: column; justify-content: space-between; }
+    /* top bar */
+    .topbar {
+      pointer-events: all;
+      display: flex; align-items: center;
+      padding: 13px 16px; gap: 10px;
+      background: var(--bg);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
 
-    /* top bar - moved badge to avoid camera cutout */
-    .topbar { pointer-events: all; display: flex; align-items: center; gap: 12px; padding: 13px 16px; background: var(--bg); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
-    .logo { font-family: 'Space Mono', monospace; font-size: 17px; color: var(--blue); margin-right: auto; }
-    .logo em { color: var(--orange); font-style: normal; }
-    #capBadge { font-family: 'Space Mono', monospace; font-size: 11px; padding: 5px 11px; border-radius: 100px; background: rgba(74,158,255,0.1); border: 1px solid var(--border); color: var(--blue); white-space: nowrap; }
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: 18px; font-weight: 700;
+      color: var(--blue);
+    }
+    .logo span { color: var(--orange); }
 
-    /* scan hint */
-    #scanHint { pointer-events: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; transition: opacity 0.5s; }
-    .ring { width: 90px; height: 90px; border: 2px solid rgba(74,158,255,0.6); border-radius: 50%; margin: 0 auto 12px; animation: pulse 2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.12); opacity: 0.3; } }
-    .pill { background: var(--bg); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 100px; padding: 8px 16px; font-size: 12px; font-family: 'Space Mono', monospace; color: var(--text); }
+    .mode-badge {
+      margin-left: auto;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px; letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 5px 10px;
+      border-radius: 100px;
+      background: rgba(74,158,255,0.1);
+      border: 1px solid var(--border);
+      color: var(--blue);
+    }
 
-    /* place button */
-    #placeBtn { pointer-events: all; position: fixed; bottom: 230px; left: 50%; transform: translateX(-50%); background: var(--blue); color: white; border: none; border-radius: 100px; padding: 14px 28px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; display: none; white-space: nowrap; animation: glow 2s ease-in-out infinite; }
-    @keyframes glow { 0%,100% { box-shadow: 0 0 20px rgba(74,158,255,0.4); } 50% { box-shadow: 0 0 50px rgba(74,158,255,0.9); } }
+    /* marker status pill */
+    #markerStatus {
+      pointer-events: none;
+      position: fixed;
+      top: 68px; left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      padding: 7px 16px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      backdrop-filter: blur(8px);
+      color: var(--muted);
+      white-space: nowrap;
+      transition: all 0.3s;
+    }
+    #markerStatus.found {
+      color: var(--green);
+      border-color: rgba(74,222,128,0.4);
+      background: rgba(74,222,128,0.08);
+    }
 
-    /* drag hint */
-    #dragHint { pointer-events: none; position: fixed; bottom: 230px; left: 50%; transform: translateX(-50%); background: var(--bg); border: 1px solid var(--border); border-radius: 100px; padding: 8px 16px; font-size: 12px; font-family: 'Space Mono', monospace; color: var(--text); display: none; white-space: nowrap; }
+    /* measurement cards — shown top left and top right */
+    #measureCards {
+      pointer-events: none;
+      position: fixed;
+      top: 110px; left: 10px; right: 10px;
+      display: flex; gap: 8px;
+    }
 
-    /* fit panel */
-    #fitPanel { pointer-events: none; position: fixed; top: 70px; right: 10px; background: var(--bg); backdrop-filter: blur(10px); border: 1px solid var(--border); border-radius: 11px; padding: 9px 13px; font-family: 'Space Mono', monospace; font-size: 11px; min-width: 138px; line-height: 1.7; }
-    #fitPanel h4 { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-    .ok { color: var(--green); } .warn { color: var(--yellow); } .bad { color: var(--red); }
+    .mcard {
+      flex: 1;
+      background: var(--bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
 
-    /* bottom panel */
-    #btm { pointer-events: all; background: var(--bg); backdrop-filter: blur(20px); border-top: 1px solid var(--border); }
-    .tabs { display: flex; border-bottom: 1px solid var(--border); }
-    .tab { flex: 1; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 10px 6px; cursor: pointer; transition: all 0.2s; text-align: center; }
-    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
-    .tp { display: none; padding: 12px 14px; } .tp.active { display: block; }
-    .fg { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 7px; margin-bottom: 9px; }
-    .field label { display: block; font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
-    .field input { width: 100%; background: rgba(10,14,26,0.9); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 8px 9px; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
-    .field input:focus { border-color: var(--blue); }
-    .sw { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; flex-wrap: wrap; }
-    .sw label { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; }
-    .dot { width: 23px; height: 23px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.15s, border-color 0.15s; display: inline-block; }
-    .dot:hover { transform: scale(1.2); } .dot.sel { border-color: white; transform: scale(1.2); }
-    .btn { border: none; border-radius: 9px; padding: 10px 13px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
-    .btn:hover { opacity: 0.88; }
-    .bf { width: 100%; } .bb { background: var(--blue); color: white; } .bo { background: var(--orange); color: white; }
-    .bg2 { background: transparent; border: 1px solid var(--border); color: var(--muted); }
-    .bd { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
-    #ol { max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; }
-    .oc { display: flex; align-items: center; gap: 9px; background: rgba(74,158,255,0.04); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; cursor: pointer; transition: all 0.2s; }
-    .oc:hover { border-color: rgba(74,158,255,0.4); } .oc.active { border-color: var(--blue); background: rgba(74,158,255,0.08); }
-    .od { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
-    .oi { flex: 1; min-width: 0; } .on { font-size: 13px; font-weight: 500; } .odim { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
-    .ox { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 2px 5px; }
-    .ox:hover { color: var(--red); }
-    .br { display: flex; gap: 7px; }
-    .em { text-align: center; color: var(--muted); font-size: 12px; padding: 11px 0; font-family: 'Space Mono', monospace; }
-    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .mcard-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 9px; letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .mcard-value {
+      font-family: 'Space Mono', monospace;
+      font-size: 20px; font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .mcard-unit {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .mcard.highlight { border-color: var(--blue); background: rgba(74,158,255,0.08); }
+    .mcard.highlight .mcard-value { color: var(--blue); }
+
+    /* mode selector tabs */
+    #modeTabs {
+      pointer-events: all;
+      position: fixed;
+      bottom: 180px; left: 50%;
+      transform: translateX(-50%);
+      display: flex; gap: 8px;
+      background: var(--bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 4px;
+    }
+
+    .mode-tab {
+      border: none;
+      border-radius: 100px;
+      padding: 8px 16px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .mode-tab.active {
+      background: var(--blue);
+      color: white;
+    }
+
+    /* bottom info panel */
+    #bottomPanel {
+      pointer-events: all;
+      background: var(--bg);
+      backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+    }
+
+    /* instructions */
+    .instructions {
+      font-size: 12px;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      line-height: 1.6;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    /* action buttons */
+    .action-row { display: flex; gap: 8px; }
+
+    .action-btn {
+      flex: 1;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .action-btn:active { transform: scale(0.97); }
+    .action-btn:hover  { opacity: 0.88; }
+    .btn-blue   { background: var(--blue);   color: white; }
+    .btn-orange { background: var(--orange); color: white; }
+    .btn-ghost  { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-green  { background: rgba(74,222,128,0.15); border: 1px solid rgba(74,222,128,0.3); color: var(--green); }
+
+    /* size suggestion chips */
+    #suggestions {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-top: 10px;
+    }
+
+    .chip {
+      pointer-events: all;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      padding: 5px 10px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: rgba(74,158,255,0.05);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chip:hover { border-color: var(--blue); color: var(--text); }
+    .chip.match { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.08); }
+    .chip.nope  { border-color: var(--red);   color: var(--red);   background: rgba(248,113,113,0.08); opacity: 0.7; }
+
+    /* screenshot flash */
+    #flash { position: fixed; inset: 0; background: white; opacity: 0; pointer-events: none; z-index: 999; transition: opacity 0.1s; }
+
+    /* calibration notice */
+    #calNotice {
+      pointer-events: none;
+      position: fixed;
+      bottom: 270px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,140,66,0.15);
+      border: 1px solid rgba(255,140,66,0.4);
+      border-radius: 100px;
+      padding: 7px 16px;
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+      color: var(--orange);
+      white-space: nowrap;
+      display: none;
+    }
   </style>
 </head>
 <body>
 
-<canvas id="c"></canvas>
+<!--
+  A-FRAME AR SCENE
+  Everything inside a-marker appears on top of the Hiro marker.
+  We use the marker position + size to calculate real measurements.
+-->
+<a-scene
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false;"
+  vr-mode-ui="enabled: false"
+  renderer="logarithmicDepthBuffer: true; antialias: true;"
+>
+  <a-marker
+    id="hiroMarker"
+    preset="hiro"
+    smooth="true"
+    smoothCount="10"
+    smoothTolerance="0.01"
+    smoothThreshold="5"
+  >
 
-<!-- splash -->
-<div id="splash">
-  <div class="logo-big">سعة <span>·</span></div>
-  <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--blue);letter-spacing:2px">AR SPACE ORGANIZER</div>
-  <div class="tagline">Point at any surface. Place virtual boxes. See exactly what fits.</div>
-  <div id="iosWarn">⚠️ iPhone detected. This app needs Android + Chrome for AR. Open on Android.</div>
-  <div class="steps">
-    <h3>How to use</h3>
-    <div class="step"><div class="sn">1</div><div>Tap <strong>Start AR</strong> and allow camera</div></div>
-    <div class="step"><div class="sn">2</div><div>Point camera at a flat floor — grid appears</div></div>
-    <div class="step"><div class="sn">3</div><div>Enter object details and tap <strong>Place Object</strong></div></div>
-    <div class="step"><div class="sn">4</div><div>Tap a placed box to select it, then drag to move</div></div>
-  </div>
-  <button class="btn-start" onclick="startAR()">Start AR →</button>
-</div>
+    <!--
+      Reference square — shows the calibrated size of the marker.
+      We know the Hiro marker = 15cm x 15cm in real life.
+      So 1 A-Frame unit here = 15cm.
+    -->
+    <a-plane
+      id="refPlane"
+      rotation="-90 0 0"
+      width="1" height="1"
+      color="#4A9EFF"
+      opacity="0.12"
+      material="transparent: true; side: double"
+    ></a-plane>
 
-<!-- UI overlay -->
+    <!-- border lines of the reference square -->
+    <a-box position="0   0.001  0.5"  width="1"    height="0.003" depth="0.01" color="#4A9EFF" opacity="0.8"></a-box>
+    <a-box position="0   0.001 -0.5"  width="1"    height="0.003" depth="0.01" color="#4A9EFF" opacity="0.8"></a-box>
+    <a-box position="0.5 0.001  0"    width="0.01" height="0.003" depth="1"    color="#4A9EFF" opacity="0.8"></a-box>
+    <a-box position="-0.5 0.001 0"   width="0.01" height="0.003" depth="1"    color="#4A9EFF" opacity="0.8"></a-box>
+
+    <!-- width arrow label -->
+    <a-text
+      id="widthLabel"
+      value="← 15 cm →"
+      align="center"
+      color="#4A9EFF"
+      scale="0.4 0.4 0.4"
+      position="0 0.05 0.6"
+      rotation="0 0 0"
+    ></a-text>
+
+    <!-- depth arrow label -->
+    <a-text
+      id="depthLabel"
+      value="← 15 cm →"
+      align="center"
+      color="#FF8C42"
+      scale="0.4 0.4 0.4"
+      position="0.65 0.05 0"
+      rotation="0 -90 0"
+    ></a-text>
+
+    <!-- distance to camera label — updates in real time -->
+    <a-text
+      id="distLabel"
+      value="-- cm"
+      align="center"
+      color="#4ade80"
+      scale="0.5 0.5 0.5"
+      position="0 0.3 0"
+    ></a-text>
+
+    <!-- area label -->
+    <a-text
+      id="areaLabel"
+      value="Area: -- cm²"
+      align="center"
+      color="#facc15"
+      scale="0.3 0.3 0.3"
+      position="0 0.18 0"
+    ></a-text>
+
+    <!-- measurement point markers (placed by user) -->
+    <a-entity id="pointA" visible="false">
+      <a-sphere radius="0.04" color="#f87171" opacity="0.9"></a-sphere>
+      <a-text value="A" align="center" color="white" scale="0.3 0.3 0.3" position="0 0.08 0"></a-text>
+    </a-entity>
+
+    <a-entity id="pointB" visible="false">
+      <a-sphere radius="0.04" color="#a78bfa" opacity="0.9"></a-sphere>
+      <a-text value="B" align="center" color="white" scale="0.3 0.3 0.3" position="0 0.08 0"></a-text>
+    </a-entity>
+
+    <!-- line between A and B (shown when both placed) -->
+    <a-entity id="measureLine" visible="false">
+      <a-cylinder id="lineGeom" radius="0.008" color="#facc15" opacity="0.9"></a-cylinder>
+    </a-entity>
+
+    <!-- distance between A and B label -->
+    <a-text
+      id="abLabel"
+      value=""
+      align="center"
+      color="#facc15"
+      scale="0.4 0.4 0.4"
+      position="0 0.5 0"
+      visible="false"
+    ></a-text>
+
+    <!-- object size comparison boxes -->
+    <a-entity id="compBox" visible="false">
+      <a-box id="compBoxMesh"
+        width="0.3" height="0.2" depth="0.25"
+        color="#4A9EFF"
+        opacity="0.5"
+        material="transparent: true"
+        position="0 0.1 0"
+      ></a-box>
+      <a-box
+        width="0.32" height="0.22" depth="0.27"
+        material="wireframe: true; color: #4A9EFF"
+        position="0 0.1 0"
+      ></a-box>
+      <a-text id="compLabel" value="Object" align="center" color="white" scale="0.28 0.28 0.28" position="0 0.26 0"></a-text>
+    </a-entity>
+
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+
+<!-- UI OVERLAY -->
 <div id="ui">
+
+  <!-- top bar -->
   <div class="topbar">
-    <div class="logo">سعة <em>·</em> Sa'ah</div>
-    <div id="capBadge">0 objects</div>
+    <div class="logo">AR<span>uler</span></div>
+    <div class="mode-badge" id="modeBadge">📏 Measure Mode</div>
   </div>
 
-  <div id="scanHint">
-    <div class="ring"></div>
-    <div class="pill" id="scanText">Point camera at flat floor</div>
+  <!-- marker status -->
+  <div id="markerStatus">🔍 Point camera at Hiro marker</div>
+
+  <!-- measurement cards -->
+  <div id="measureCards">
+    <div class="mcard highlight" id="cardDist">
+      <div class="mcard-label">Distance</div>
+      <div class="mcard-value" id="valDist">--</div>
+      <div class="mcard-unit">cm from marker</div>
+    </div>
+    <div class="mcard" id="cardW">
+      <div class="mcard-label">Width</div>
+      <div class="mcard-value" id="valW">15</div>
+      <div class="mcard-unit">cm (reference)</div>
+    </div>
+    <div class="mcard" id="cardAB">
+      <div class="mcard-label">A → B</div>
+      <div class="mcard-value" id="valAB">--</div>
+      <div class="mcard-unit">cm measured</div>
+    </div>
   </div>
 
-  <button id="placeBtn" onclick="placeObject()">👆 Tap to place object here</button>
-  <div id="dragHint">✋ Tap a box to select · Drag to move</div>
+  <!-- calibration notice -->
+  <div id="calNotice">⚠ Print Hiro marker at exactly 15cm wide for accurate measurements</div>
 
-  <div id="fitPanel">
-    <h4>Fit Analysis</h4>
-    <div id="fs" class="ok">Add objects to start</div>
+  <!-- mode selector -->
+  <div id="modeTabs">
+    <button class="mode-tab active" onclick="setMode('measure',this)">📏 Measure</button>
+    <button class="mode-tab"        onclick="setMode('compare',this)">📦 Compare</button>
+    <button class="mode-tab"        onclick="setMode('area',this)">⬛ Area</button>
   </div>
 
-  <div id="btm">
-    <div class="tabs">
-      <button class="tab active" onclick="st('add',this)">➕ Add</button>
-      <button class="tab"        onclick="st('list',this)">📦 Objects</button>
-      <button class="tab"        onclick="st('space',this)">📐 Space</button>
-    </div>
+  <!-- bottom panel -->
+  <div id="bottomPanel">
 
-    <div class="tp active" id="tab-add">
-      <div class="fg">
-        <div class="field"><label>Name</label><input type="text" id="oN" placeholder="Clothes Box" inputmode="text"/></div>
-        <div class="field"><label>W cm</label><input type="number" id="oW" placeholder="50" min="5" inputmode="decimal"/></div>
-        <div class="field"><label>D cm</label><input type="number" id="oD" placeholder="40" min="5" inputmode="decimal"/></div>
-        <div class="field"><label>H cm</label><input type="number" id="oH" placeholder="30" min="5" inputmode="decimal"/></div>
-      </div>
-      <div class="sw"><label>Color</label><div id="sr"></div></div>
-      <button class="btn bb bf" onclick="queueObj()">Place Object in AR →</button>
-    </div>
-
-    <div class="tp" id="tab-list">
-      <div id="ol"><div class="em">No objects yet!</div></div>
-      <div class="br">
-        <button class="btn bg2" style="flex:1;font-size:12px" onclick="rmSel()">✕ Remove Selected</button>
-        <button class="btn bd"  style="flex:1;font-size:12px" onclick="clrAll()">🗑 Clear All</button>
+    <!-- MEASURE MODE -->
+    <div id="pane-measure">
+      <div class="instructions" id="instrText">Point at marker → tap <strong>Set A</strong> then <strong>Set B</strong> to measure distance</div>
+      <div class="action-row">
+        <button class="action-btn btn-blue"   onclick="setPoint('A')">📍 Set A</button>
+        <button class="action-btn btn-orange" onclick="setPoint('B')">📍 Set B</button>
+        <button class="action-btn btn-ghost"  onclick="clearPoints()">↺ Reset</button>
       </div>
     </div>
 
-    <div class="tp" id="tab-space">
-      <p style="font-size:11px;color:var(--muted);margin-bottom:9px;font-family:'Space Mono',monospace">Real size of the space you are filling:</p>
-      <div class="br" style="margin-bottom:9px;flex-wrap:wrap;gap:5px">
-        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(120,100,80)">🚗 Car Boot</button>
-        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(35,20,45)">🎒 Backpack</button>
-        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(50,25,70)">🧳 Suitcase</button>
-        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(90,40,200)">📦 Shelf</button>
+    <!-- COMPARE MODE -->
+    <div id="pane-compare" style="display:none">
+      <div class="instructions">Enter an object size to see if it fits on the marker space</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">W cm</div>
+          <input type="number" id="compW" placeholder="50" style="width:100%;background:rgba(10,14,26,0.9);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 9px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none" inputmode="decimal"/>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">D cm</div>
+          <input type="number" id="compD" placeholder="40" style="width:100%;background:rgba(10,14,26,0.9);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 9px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none" inputmode="decimal"/>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">H cm</div>
+          <input type="number" id="compH" placeholder="30" style="width:100%;background:rgba(10,14,26,0.9);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 9px;font-family:'DM Sans',sans-serif;font-size:14px;outline:none" inputmode="decimal"/>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:9px">
-        <div class="field"><label>W cm</label><input type="number" id="sW" value="120" inputmode="decimal"/></div>
-        <div class="field"><label>D cm</label><input type="number" id="sD" value="100" inputmode="decimal"/></div>
-        <div class="field"><label>H cm</label><input type="number" id="sH" value="80"  inputmode="decimal"/></div>
+      <div class="action-row">
+        <button class="action-btn btn-blue" onclick="showCompare()">Show in AR →</button>
+        <button class="action-btn btn-ghost" onclick="hideCompare()">Hide</button>
       </div>
-      <button class="btn bo bf" onclick="apSp()">Apply Space Size</button>
+      <!-- quick presets -->
+      <div id="suggestions">
+        <div class="chip" onclick="quickComp(21,30,1)">📄 A4 Paper</div>
+        <div class="chip" onclick="quickComp(24,17,4)">📱 Phone</div>
+        <div class="chip" onclick="quickComp(38,27,11)">💻 Laptop</div>
+        <div class="chip" onclick="quickComp(30,20,15)">📦 Shoe Box</div>
+        <div class="chip" onclick="quickComp(40,30,20)">🎒 Bag</div>
+      </div>
     </div>
+
+    <!-- AREA MODE -->
+    <div id="pane-area" style="display:none">
+      <div class="instructions">The blue square = reference area (15×15cm = 225cm²)<br/>Use it as a scale reference for your space</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <div class="mcard">
+          <div class="mcard-label">Ref Area</div>
+          <div class="mcard-value" style="font-size:16px">225 cm²</div>
+          <div class="mcard-unit">15 × 15 cm</div>
+        </div>
+        <div class="mcard highlight" id="cardArea">
+          <div class="mcard-label">Your Space</div>
+          <div class="mcard-value" id="valArea" style="font-size:16px">--</div>
+          <div class="mcard-unit">cm² estimated</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input type="number" id="areaW" placeholder="Width of space (cm)" style="flex:1;background:rgba(10,14,26,0.9);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 9px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none" inputmode="decimal"/>
+        <input type="number" id="areaD" placeholder="Depth (cm)" style="flex:1;background:rgba(10,14,26,0.9);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 9px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none" inputmode="decimal"/>
+        <button class="action-btn btn-blue" style="flex:0.6;padding:8px" onclick="calcArea()">Calc</button>
+      </div>
+    </div>
+
   </div>
 </div>
+
+<div id="flash"></div>
 
 <script>
-// show iOS warning
-if (/iPad|iPhone|iPod/.test(navigator.userAgent)) document.getElementById('iosWarn').style.display = 'block';
+// ════════════════════════════════════════
+// CALIBRATION
+// The Hiro marker = 15cm x 15cm in real life
+// AR.js renders it at exactly 1 unit = 15cm
+// So 1 A-Frame unit = 15 cm
+// ════════════════════════════════════════
+const UNIT_TO_CM = 15; // 1 A-Frame unit = 15 cm
 
-// ══════════════════════════════════════
-// THREE.JS + WEBXR
-// ══════════════════════════════════════
-const canvas   = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.xr.enabled = true; // enables WebXR
-
-const scene  = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-// lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-const dl = new THREE.DirectionalLight(0xffffff, 0.5);
-dl.position.set(1, 3, 2);
-scene.add(dl);
-
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-});
-
-// ── reticle (follows the detected floor) ──
-const reticle = new THREE.Mesh(
-  new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: 0x4A9EFF, opacity: 0.9, transparent: true, side: THREE.DoubleSide })
-);
-reticle.matrixAutoUpdate = false;
-reticle.visible = false;
-scene.add(reticle);
-
-// ── grid (appears on the detected floor) ──
-const grid = new THREE.GridHelper(2, 10, 0x4A9EFF, 0x1E3A5F);
-grid.material.transparent = true;
-grid.material.opacity = 0.55;
-grid.visible = false;
-scene.add(grid);
-
-// floor plane under the grid
-const floorPlane = new THREE.Mesh(
-  new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: 0x080C18, transparent: true, opacity: 0.28, side: THREE.DoubleSide })
-);
-floorPlane.visible = false;
-scene.add(floorPlane);
-
-// ══════════════════════════════════════
-// APP STATE
-// ══════════════════════════════════════
-const S = {
-  objects:  [],
-  selId:    null,
-  nextId:   1,
-  color:    '#4A9EFF',
-  queued:   null,
-  hitPos:   null,       // where reticle is on floor
-  floorY:   0,          // Y position of detected floor
-  space:    { w:120, d:100, h:80 },
-  colors:   ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
-
-  // dragging state
-  dragging:   false,
-  dragObjId:  null,
-  dragStartX: 0,
-  dragStartZ: 0,
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+const state = {
+  markerFound: false,
+  mode: 'measure',       // measure | compare | area
+  pointA: null,          // {x, z} position of point A on marker plane
+  pointB: null,          // {x, z} position of point B on marker plane
+  cameraDistance: 0,     // distance from camera to marker in cm
 };
 
-const CM = 0.01; // 1 cm = 0.01 meters in WebXR
+// ════════════════════════════════════════
+// MARKER EVENTS
+// ════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  const marker = document.getElementById('hiroMarker');
 
-// ══════════════════════════════════════
-// START AR
-// ══════════════════════════════════════
-async function startAR() {
-  if (!navigator.xr) { alert('WebXR not supported. Use Chrome on Android.'); return; }
+  marker.addEventListener('markerFound', () => {
+    state.markerFound = true;
+    const el = document.getElementById('markerStatus');
+    el.textContent = '✓ Marker detected — measuring...';
+    el.classList.add('found');
+    document.getElementById('calNotice').style.display = 'block';
 
-  const ok = await navigator.xr.isSessionSupported('immersive-ar');
-  if (!ok) { alert('AR not supported on this device. Use Chrome on Android with ARCore.'); return; }
-
-  const session = await navigator.xr.requestSession('immersive-ar', {
-    requiredFeatures: ['hit-test'],
-    optionalFeatures: ['dom-overlay'],
-    domOverlay: { root: document.getElementById('ui') },
+    // start updating measurements every frame
+    startMeasuring();
   });
 
-  renderer.xr.setReferenceSpaceType('local');
-  await renderer.xr.setSession(session);
+  marker.addEventListener('markerLost', () => {
+    state.markerFound = false;
+    const el = document.getElementById('markerStatus');
+    el.textContent = '🔍 Point camera at Hiro marker';
+    el.classList.remove('found');
+    document.getElementById('calNotice').style.display = 'none';
 
-  canvas.style.display = 'block';
-  const ui = document.getElementById('ui');
-  ui.style.display = 'flex';
-  document.getElementById('splash').style.display = 'none';
-
-  // tap fires when user taps screen in AR
-  session.addEventListener('select', onARTap);
-
-  let hitSource = null;
-  let hitInited = false;
-
-  // render loop
-  renderer.setAnimationLoop((time, frame) => {
-    if (!frame) return;
-
-    const refSpace = renderer.xr.getReferenceSpace();
-
-    // init hit test on first frame
-    if (!hitInited) {
-      session.requestReferenceSpace('viewer').then(vs => {
-        session.requestHitTestSource({ space: vs }).then(src => { hitSource = src; });
-      });
-      hitInited = true;
-    }
-
-    if (hitSource) {
-      const hits = frame.getHitTestResults(hitSource);
-      if (hits.length > 0) {
-        const pose = hits[0].getPose(refSpace);
-        if (pose) {
-          // update reticle to follow floor
-          reticle.visible = true;
-          reticle.matrix.fromArray(pose.transform.matrix);
-
-          // get world position of the hit
-          const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-          S.hitPos = p;
-          S.floorY = p.y; // remember floor height
-
-          // move grid and floor to this position
-          grid.position.set(p.x, p.y + 0.001, p.z);
-          grid.visible = true;
-          floorPlane.position.set(p.x, p.y + 0.0005, p.z);
-          floorPlane.visible = true;
-
-          // hide scan hint
-          document.getElementById('scanHint').style.opacity = '0';
-
-          // show place button if object queued
-          if (S.queued) document.getElementById('placeBtn').style.display = 'block';
-          if (S.objects.length > 0) document.getElementById('dragHint').style.display = 'block';
-        }
-      } else {
-        reticle.visible = false;
-        document.getElementById('scanHint').style.opacity = '1';
-        document.getElementById('placeBtn').style.display = 'none';
-      }
-    }
-
-    renderer.render(scene, camera);
+    // reset displays
+    document.getElementById('valDist').textContent = '--';
   });
-}
-
-// ══════════════════════════════════════
-// ON AR TAP — place object if queued
-// ══════════════════════════════════════
-function onARTap() {
-  // only auto-place if object is queued AND no object is being dragged
-  if (S.queued && S.hitPos && !S.dragging) {
-    placeObject();
-  }
-}
-
-// ══════════════════════════════════════
-// QUEUE OBJECT — ready to place
-// ══════════════════════════════════════
-function queueObj() {
-  const name = document.getElementById('oN').value.trim() || 'Box';
-  const w    = parseFloat(document.getElementById('oW').value);
-  const d    = parseFloat(document.getElementById('oD').value);
-  const h    = parseFloat(document.getElementById('oH').value);
-
-  if (!w || !d || !h) { alert('Please enter W, D, and H dimensions!'); return; }
-
-  S.queued = { name, w, d, h, color: S.color };
-
-  const btn = document.getElementById('placeBtn');
-  btn.textContent = `👆 Tap floor to place "${name}"`;
-  if (S.hitPos) btn.style.display = 'block';
-}
-
-// ══════════════════════════════════════
-// PLACE OBJECT at reticle position
-// ══════════════════════════════════════
-function placeObject() {
-  if (!S.queued || !S.hitPos) return;
-
-  const obj = S.queued;
-  const id  = S.nextId++;
-  S.objects.push({ id, ...obj });
-  S.queued = null;
-
-  // convert cm to meters
-  const aw = obj.w * CM;
-  const ad = obj.d * CM;
-  const ah = obj.h * CM;
-
-  const geo = new THREE.BoxGeometry(aw, ah, ad);
-
-  // solid transparent box
-  const solidMat = new THREE.MeshPhongMaterial({
-    color: new THREE.Color(obj.color),
-    transparent: true,
-    opacity: 0.70,
-  });
-  const solid = new THREE.Mesh(geo, solidMat);
-
-  // wireframe overlay
-  const wireMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(obj.color), wireframe: true });
-  const wire    = new THREE.Mesh(geo, wireMat);
-
-  const group = new THREE.Group();
-  group.name  = 'obj-' + id;
-  group.userData.id = id;
-
-  // place box ON the floor surface, offset so it doesn't overlap previous box
-  // spread objects slightly apart using a small offset based on count
-  const offset = (S.objects.length - 1) * (aw + 0.05);
-  group.position.set(
-    S.hitPos.x + (offset % 0.5) - 0.25, // wrap around after a few boxes
-    S.floorY + ah / 2,                   // sit on floor
-    S.hitPos.z
-  );
-
-  group.add(solid);
-  group.add(wire);
-  scene.add(group);
-
-  // clear inputs
-  document.getElementById('oN').value = '';
-  document.getElementById('oW').value = '';
-  document.getElementById('oD').value = '';
-  document.getElementById('oH').value = '';
-  document.getElementById('placeBtn').style.display = 'none';
-  document.getElementById('dragHint').style.display = 'block';
-
-  renderList();
-  updFit();
-}
-
-// ══════════════════════════════════════
-// TOUCH DRAG TO MOVE OBJECTS
-// User taps a box to select it, then drags to move it along the floor
-// ══════════════════════════════════════
-const raycaster = new THREE.Raycaster();
-
-function getTouchNDC(touch) {
-  // convert touch position to normalized device coordinates (-1 to 1)
-  return new THREE.Vector2(
-    (touch.clientX / window.innerWidth)  *  2 - 1,
-    (touch.clientY / window.innerHeight) * -2 + 1
-  );
-}
-
-// get all placed box groups
-function getBoxGroups() {
-  return S.objects.map(o => scene.getObjectByName('obj-' + o.id)).filter(Boolean);
-}
-
-canvas.addEventListener('touchstart', e => {
-  if (e.touches.length !== 1) return;
-  const touch = e.touches[0];
-
-  // check if touch hits any box
-  raycaster.setFromCamera(getTouchNDC(touch), camera);
-  const boxes = getBoxGroups();
-  const hits  = raycaster.intersectObjects(boxes, true);
-
-  if (hits.length > 0) {
-    // find the parent group
-    let obj = hits[0].object;
-    while (obj.parent && !obj.userData.id) obj = obj.parent;
-
-    S.dragging   = true;
-    S.dragObjId  = obj.userData.id;
-    S.selId      = obj.userData.id;
-    S.dragStartX = touch.clientX;
-    S.dragStartZ = touch.clientY;
-
-    renderList();
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', e => {
-  if (!S.dragging || !S.dragObjId) return;
-  e.preventDefault();
-
-  const touch = e.touches[0];
-  const group = scene.getObjectByName('obj-' + S.dragObjId);
-  if (!group) return;
-
-  // calculate movement delta in screen pixels
-  const dx = touch.clientX - S.dragStartX;
-  const dz = touch.clientY - S.dragStartZ;
-
-  // convert screen delta to world units
-  // scale factor: approx 1 pixel = 0.002 meters at typical AR viewing distance
-  const worldScale = 0.003;
-  group.position.x += dx * worldScale;
-  group.position.z += dz * worldScale;
-
-  // keep on floor
-  const obj = S.objects.find(o => o.id === S.dragObjId);
-  if (obj) group.position.y = S.floorY + (obj.h * CM) / 2;
-
-  S.dragStartX = touch.clientX;
-  S.dragStartZ = touch.clientY;
-}, { passive: false });
-
-canvas.addEventListener('touchend', () => {
-  S.dragging  = false;
-  S.dragObjId = null;
 });
 
-// ══════════════════════════════════════
-// COLOR SWATCHES
-// ══════════════════════════════════════
-function buildSwatches() {
-  const row = document.getElementById('sr');
-  S.colors.forEach(c => {
-    const d = document.createElement('div');
-    d.className = 'dot' + (c === S.color ? ' sel' : '');
-    d.style.background = c;
-    d.onclick = () => { document.querySelectorAll('.dot').forEach(x => x.classList.remove('sel')); d.classList.add('sel'); S.color = c; };
-    row.appendChild(d);
+// ════════════════════════════════════════
+// MEASURING LOOP
+// Runs every animation frame to update
+// the distance from camera to marker
+// ════════════════════════════════════════
+function startMeasuring() {
+  function loop() {
+    if (!state.markerFound) return;
+
+    const marker = document.getElementById('hiroMarker');
+    const camera = document.querySelector('[camera]');
+
+    if (marker && camera) {
+      // get world positions
+      const markerPos = new THREE.Vector3();
+      const camPos    = new THREE.Vector3();
+
+      marker.object3D.getWorldPosition(markerPos);
+      camera.object3D.getWorldPosition(camPos);
+
+      // calculate distance in A-Frame units then convert to cm
+      const distUnits = markerPos.distanceTo(camPos);
+      const distCM    = Math.round(distUnits * UNIT_TO_CM);
+
+      state.cameraDistance = distCM;
+
+      // update the display
+      document.getElementById('valDist').textContent = distCM;
+
+      // update the floating label above the marker
+      document.getElementById('distLabel').setAttribute('value', distCM + ' cm away');
+
+      // update area label
+      document.getElementById('areaLabel').setAttribute('value', 'Ref: 15×15 cm');
+    }
+
+    requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+// ════════════════════════════════════════
+// SET MEASUREMENT POINTS A and B
+// Places a sphere on the marker plane
+// User can set 2 points to measure between them
+// ════════════════════════════════════════
+let pointASet = false;
+let pointBSet = false;
+
+// we place points at fixed offsets on the marker for simplicity
+// in a real app we'd use raycasting to the exact tap position
+const POINT_POSITIONS = [
+  { x: -0.3, y: 0.01, z: -0.3 },
+  { x:  0.3, y: 0.01, z:  0.3 },
+  { x: -0.3, y: 0.01, z:  0.3 },
+  { x:  0.3, y: 0.01, z: -0.3 },
+];
+let pointIdx = 0;
+
+function setPoint(pt) {
+  if (!state.markerFound) {
+    alert('Please point the camera at the Hiro marker first!');
+    return;
+  }
+
+  const pos = POINT_POSITIONS[pointIdx % POINT_POSITIONS.length];
+  pointIdx++;
+
+  if (pt === 'A') {
+    const el = document.getElementById('pointA');
+    el.setAttribute('visible', 'true');
+    el.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+    state.pointA = pos;
+    pointASet = true;
+    document.getElementById('instrText').textContent = 'Point A set! Now tap Set B to measure.';
+  } else {
+    const el = document.getElementById('pointB');
+    el.setAttribute('visible', 'true');
+    el.setAttribute('position', `${pos.x * -1} ${pos.y} ${pos.z * -1}`);
+    state.pointB = { x: pos.x * -1, y: pos.y, z: pos.z * -1 };
+    pointBSet = true;
+  }
+
+  // calculate A→B distance if both set
+  if (pointASet && pointBSet) {
+    calcABDistance();
+  }
+}
+
+function calcABDistance() {
+  const a = state.pointA;
+  const b = state.pointB;
+  if (!a || !b) return;
+
+  // distance in A-Frame units
+  const dx   = b.x - a.x;
+  const dz   = b.z - a.z;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+
+  // convert to cm
+  const distCM = Math.round(dist * UNIT_TO_CM);
+
+  // update the display card
+  document.getElementById('valAB').textContent = distCM;
+
+  // show the line between A and B
+  const midX = (a.x + b.x) / 2;
+  const midZ = (a.z + b.z) / 2;
+  const angle = Math.atan2(b.x - a.x, b.z - a.z);
+
+  const lineEl = document.getElementById('measureLine');
+  lineEl.setAttribute('visible', 'true');
+  lineEl.setAttribute('position', `${midX} 0.02 ${midZ}`);
+  lineEl.setAttribute('rotation', `0 ${THREE.MathUtils.radToDeg(angle)} 0`);
+
+  // update the line cylinder height to match distance
+  document.getElementById('lineGeom').setAttribute('height', dist);
+
+  // show the A→B label
+  const label = document.getElementById('abLabel');
+  label.setAttribute('visible', 'true');
+  label.setAttribute('value', `${distCM} cm`);
+  label.setAttribute('position', `${midX} 0.15 ${midZ}`);
+
+  document.getElementById('instrText').textContent = `✓ Distance A→B = ${distCM} cm`;
+}
+
+function clearPoints() {
+  document.getElementById('pointA').setAttribute('visible', 'false');
+  document.getElementById('pointB').setAttribute('visible', 'false');
+  document.getElementById('measureLine').setAttribute('visible', 'false');
+  document.getElementById('abLabel').setAttribute('visible', 'false');
+  document.getElementById('valAB').textContent = '--';
+  state.pointA = null;
+  state.pointB = null;
+  pointASet = false;
+  pointBSet = false;
+  pointIdx  = 0;
+  document.getElementById('instrText').textContent = 'Point at marker → tap Set A then Set B to measure distance';
+}
+
+// ════════════════════════════════════════
+// COMPARE MODE
+// Shows a 3D box scaled to the user's object dimensions
+// so they can see how big it is relative to the marker
+// ════════════════════════════════════════
+function showCompare() {
+  const w = parseFloat(document.getElementById('compW').value) || 30;
+  const d = parseFloat(document.getElementById('compD').value) || 20;
+  const h = parseFloat(document.getElementById('compH').value) || 15;
+
+  // convert cm to A-Frame units (divide by UNIT_TO_CM)
+  const aw = w / UNIT_TO_CM;
+  const ad = d / UNIT_TO_CM;
+  const ah = h / UNIT_TO_CM;
+
+  const box = document.getElementById('compBoxMesh');
+  box.setAttribute('width',  aw);
+  box.setAttribute('depth',  ad);
+  box.setAttribute('height', ah);
+  box.setAttribute('position', `0 ${ah/2} 0`);
+
+  document.getElementById('compLabel').setAttribute('value', `${w}×${d}×${h} cm`);
+  document.getElementById('compBox').setAttribute('visible', 'true');
+
+  // check if it fits on the marker (15x15cm reference)
+  const fits = w <= 15 && d <= 15;
+  updateChips(w, d, h);
+}
+
+function hideCompare() {
+  document.getElementById('compBox').setAttribute('visible', 'false');
+}
+
+function quickComp(w, d, h) {
+  document.getElementById('compW').value = w;
+  document.getElementById('compD').value = d;
+  document.getElementById('compH').value = h;
+  showCompare();
+}
+
+function updateChips(w, d, h) {
+  // highlight matching preset chip
+  const presets = [
+    { el: 0, w:21, d:30, h:1  },
+    { el: 1, w:24, d:17, h:4  },
+    { el: 2, w:38, d:27, h:11 },
+    { el: 3, w:30, d:20, h:15 },
+    { el: 4, w:40, d:30, h:20 },
+  ];
+  const chips = document.querySelectorAll('.chip');
+  chips.forEach((c, i) => {
+    const p = presets[i];
+    if (p && p.w === w && p.d === d && p.h === h) c.classList.add('match');
+    else c.classList.remove('match');
   });
 }
-buildSwatches();
 
-// ══════════════════════════════════════
-// TABS
-// ══════════════════════════════════════
-function st(name, btn) {
-  document.querySelectorAll('.tp').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
+// ════════════════════════════════════════
+// AREA MODE
+// ════════════════════════════════════════
+function calcArea() {
+  const w   = parseFloat(document.getElementById('areaW').value);
+  const d   = parseFloat(document.getElementById('areaD').value);
+  if (!w || !d) { alert('Enter width and depth!'); return; }
+  const area = Math.round(w * d);
+  document.getElementById('valArea').textContent = area.toLocaleString();
+}
+
+// ════════════════════════════════════════
+// MODE SWITCHING
+// ════════════════════════════════════════
+function setMode(mode, btn) {
+  state.mode = mode;
+
+  // update tab buttons
+  document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+
+  // show correct pane
+  document.getElementById('pane-measure').style.display = mode === 'measure' ? 'block' : 'none';
+  document.getElementById('pane-compare').style.display = mode === 'compare' ? 'block' : 'none';
+  document.getElementById('pane-area').style.display    = mode === 'area'    ? 'block' : 'none';
+
+  // update badge
+  const badges = { measure: '📏 Measure Mode', compare: '📦 Compare Mode', area: '⬛ Area Mode' };
+  document.getElementById('modeBadge').textContent = badges[mode];
+
+  // hide compare box when switching away
+  if (mode !== 'compare') hideCompare();
 }
 
-// ══════════════════════════════════════
-// SPACE PRESETS
-// ══════════════════════════════════════
-function sp(w, d, h) { document.getElementById('sW').value = w; document.getElementById('sD').value = d; document.getElementById('sH').value = h; apSp(); }
-function apSp() { S.space.w = +document.getElementById('sW').value||120; S.space.d = +document.getElementById('sD').value||100; S.space.h = +document.getElementById('sH').value||80; updFit(); }
-
-// ══════════════════════════════════════
-// SELECT / REMOVE
-// ══════════════════════════════════════
-function selObj(id) { S.selId = id; renderList(); }
-function rmSel() { if (!S.selId) { alert('Select an object from the list first!'); return; } rmById(S.selId); }
-function rmById(id) {
-  const g = scene.getObjectByName('obj-' + id);
-  if (g) scene.remove(g);
-  S.objects = S.objects.filter(o => o.id !== id);
-  if (S.selId === id) S.selId = null;
-  renderList(); updFit();
-}
-function clrAll() {
-  if (!S.objects.length) return;
-  if (!confirm('Remove all objects?')) return;
-  S.objects.forEach(o => { const g = scene.getObjectByName('obj-' + o.id); if (g) scene.remove(g); });
-  S.objects = []; S.selId = null; renderList(); updFit();
-}
-
-// ══════════════════════════════════════
-// RENDER LIST
-// ══════════════════════════════════════
-function renderList() {
-  const list = document.getElementById('ol');
-  document.getElementById('capBadge').textContent = S.objects.length + ' object' + (S.objects.length !== 1 ? 's' : '');
-  if (!S.objects.length) { list.innerHTML = '<div class="em">No objects placed yet!</div>'; return; }
-  list.innerHTML = '';
-  S.objects.forEach(o => {
-    const c = document.createElement('div');
-    c.className = 'oc' + (o.id === S.selId ? ' active' : '');
-    c.innerHTML = `<div class="od" style="background:${o.color}"></div><div class="oi"><div class="on">${o.name}</div><div class="odim">${o.w}×${o.d}×${o.h} cm</div></div><button class="ox" onclick="rmById(${o.id});event.stopPropagation()">×</button>`;
-    c.onclick = () => selObj(o.id);
-    list.appendChild(c);
-  });
-}
-
-// ══════════════════════════════════════
-// FIT ANALYSIS
-// ══════════════════════════════════════
-function updFit() {
-  const sv = S.space.w * S.space.d * S.space.h;
-  const uv = S.objects.reduce((s, o) => s + o.w * o.d * o.h, 0);
-  const pct = Math.min(100, Math.round((uv / sv) * 100));
-  const el = document.getElementById('fs');
-  if (!S.objects.length) { el.className = 'ok'; el.textContent = 'Add objects to start'; return; }
-  if (pct < 60)          { el.className = 'ok';   el.textContent = `✓ ${pct}% full — fits!`; }
-  else if (pct < 85)     { el.className = 'warn'; el.textContent = `⚠ ${pct}% — getting tight`; }
-  else                   { el.className = 'bad';  el.textContent = `✗ ${pct}% — won't fit!`; }
-}
+// access Three.js from A-Frame
+// we need it for distance calculation
+let THREE;
+document.querySelector('a-scene').addEventListener('loaded', () => {
+  THREE = window.THREE || AFRAME.THREE;
+});
 </script>
 </body>
 </html>
