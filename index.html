@@ -79,7 +79,7 @@
   <div class="steps">
     <h3>How to use</h3>
     <div class="step"><div class="sn">1</div><div>Tap <strong>Start</strong> and allow camera</div></div>
-    <div class="step"><div class="sn">2</div><div>Point camera at your space — grid adapts to angle</div></div>
+    <div class="step"><div class="sn">2</div><div>Point camera at the floor or your space</div></div>
     <div class="step"><div class="sn">3</div><div>Enter object name and size then tap <strong>Place</strong></div></div>
     <div class="step"><div class="sn">4</div><div>Drag boxes around to organize them</div></div>
   </div>
@@ -139,6 +139,7 @@
 </div>
 
 <script>
+// THREE.JS — transparent canvas on top of camera video
 const canvas   = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
 renderer.setPixelRatio(window.devicePixelRatio);
@@ -147,10 +148,10 @@ renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
 
-// fixed camera looking straight ahead — gyro rotates the GRID not the camera
+// camera looks at the grid from a natural phone-holding angle
 const cam = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-cam.position.set(0, 0, 0);
-cam.lookAt(0, 0, -1);
+cam.position.set(0, 2.5, 1.5);
+cam.lookAt(0, 0, -0.5);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const dl = new THREE.DirectionalLight(0xffffff, 0.5);
@@ -163,61 +164,21 @@ window.addEventListener('resize', () => {
   cam.updateProjectionMatrix();
 });
 
-// grid placed 2 units in front of camera — centered in screen
+// grid sits flat, viewed from above at an angle — looks like floor
 const gridGroup = new THREE.Group();
-gridGroup.position.set(0, 0, -2);
 scene.add(gridGroup);
 
-const grid = new THREE.GridHelper(2, 10, 0x4A9EFF, 0x1E3A5F);
+const grid = new THREE.GridHelper(3, 12, 0x4A9EFF, 0x1E3A5F);
 grid.material.transparent = true;
-grid.material.opacity = 0.65;
+grid.material.opacity = 0.6;
 gridGroup.add(grid);
 
 const floorMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(2, 2),
-  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.25, side:THREE.DoubleSide })
+  new THREE.PlaneGeometry(3, 3),
+  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.28, side:THREE.DoubleSide })
 );
 floorMesh.rotation.x = -Math.PI/2;
 gridGroup.add(floorMesh);
-
-// smooth gyro values to avoid jitter
-let smoothBeta  = 0;
-let smoothGamma = 0;
-const SMOOTH = 0.08; // lower = smoother but slower
-
-// gyroscope — rotates the grid to match where phone is pointing
-// beta=0 phone flat, beta=90 phone upright
-// when phone upright pointing at a wall → grid looks like it's on the wall
-// when phone tilted down at floor → grid looks like it's on the floor
-function startGyro() {
-  window.addEventListener('deviceorientation', e => {
-    if (e.beta === null) return;
-
-    // smooth the values
-    smoothBeta  += (e.beta  - smoothBeta)  * SMOOTH;
-    smoothGamma += (e.gamma - smoothGamma) * SMOOTH;
-
-    // convert to radians
-    const b = THREE.MathUtils.degToRad(smoothBeta);
-    const g = THREE.MathUtils.degToRad(smoothGamma);
-
-    // rotate grid to match phone orientation
-    // X rotation: beta-90 converts phone tilt to grid tilt
-    // Z rotation: gamma handles left/right tilt
-    gridGroup.rotation.x = b - Math.PI / 2;
-    gridGroup.rotation.z = -g;
-  });
-}
-
-// request gyro permission (needed on iOS)
-if (typeof DeviceOrientationEvent !== 'undefined' &&
-    typeof DeviceOrientationEvent.requestPermission === 'function') {
-  DeviceOrientationEvent.requestPermission()
-    .then(s => { if (s === 'granted') startGyro(); })
-    .catch(() => {});
-} else {
-  startGyro();
-}
 
 // render loop
 function animate() { requestAnimationFrame(animate); renderer.render(scene, cam); }
@@ -234,18 +195,20 @@ const S = {
 
 const CM = 0.01;
 
+// 9 spread out slots on the grid — no overlap
 const SLOTS = [
-  new THREE.Vector3(-0.55, 0, -0.55),
-  new THREE.Vector3( 0,    0, -0.55),
-  new THREE.Vector3( 0.55, 0, -0.55),
-  new THREE.Vector3(-0.55, 0,  0   ),
-  new THREE.Vector3( 0,    0,  0   ),
-  new THREE.Vector3( 0.55, 0,  0   ),
-  new THREE.Vector3(-0.55, 0,  0.55),
-  new THREE.Vector3( 0,    0,  0.55),
-  new THREE.Vector3( 0.55, 0,  0.55),
+  new THREE.Vector3(-0.8, 0, -0.8),
+  new THREE.Vector3( 0,   0, -0.8),
+  new THREE.Vector3( 0.8, 0, -0.8),
+  new THREE.Vector3(-0.8, 0,  0  ),
+  new THREE.Vector3( 0,   0,  0  ),
+  new THREE.Vector3( 0.8, 0,  0  ),
+  new THREE.Vector3(-0.8, 0,  0.8),
+  new THREE.Vector3( 0,   0,  0.8),
+  new THREE.Vector3( 0.8, 0,  0.8),
 ];
 
+// START APP
 async function startApp() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -262,6 +225,7 @@ async function startApp() {
   }
 }
 
+// SWATCHES
 function buildSwatches() {
   const row = document.getElementById('sr');
   S.colors.forEach(c => {
@@ -315,21 +279,26 @@ function placeObj() {
 
   const slot=SLOTS[idx];
   group.position.set(slot.x, ah/2, slot.z);
+
   group.add(solid); group.add(wire);
   gridGroup.add(group);
 
   S.objects.push({id,...obj}); S.queued=null;
+
   document.getElementById('oN').value='';
   document.getElementById('oW').value='';
   document.getElementById('oD').value='';
   document.getElementById('oH').value='';
   document.getElementById('placeBtn').style.display='none';
   document.getElementById('dragHint').style.display='block';
+
   renderList(); updFit();
 }
 
+// TOUCH DRAG
 const raycaster=new THREE.Raycaster();
 function ndc(t){ return new THREE.Vector2((t.clientX/window.innerWidth)*2-1,(t.clientY/window.innerHeight)*-2+1); }
+
 canvas.style.pointerEvents='all';
 
 canvas.addEventListener('touchstart',e=>{
@@ -355,8 +324,8 @@ canvas.addEventListener('touchmove',e=>{
   const t=e.touches[0];
   const group=gridGroup.getObjectByName('obj-'+S.dragId);
   if(!group) return;
-  const dx=(t.clientX-S.lastTX)*0.003;
-  const dz=(t.clientY-S.lastTY)*0.003;
+  const dx=(t.clientX-S.lastTX)*0.004;
+  const dz=(t.clientY-S.lastTY)*0.004;
   group.position.x+=dx;
   group.position.z+=dz;
   group.position.y=group.userData.ah/2;
