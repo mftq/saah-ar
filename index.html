@@ -148,10 +148,10 @@ renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
 
-// camera looks at the grid from a natural phone-holding angle
+// camera matches how you'd hold phone pointing at floor of car boot
 const cam = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-cam.position.set(0, 2.5, 1.5);
-cam.lookAt(0, 0, -0.5);
+cam.position.set(0, 3.5, 3);
+cam.lookAt(0, 0, -1);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const dl = new THREE.DirectionalLight(0xffffff, 0.5);
@@ -164,18 +164,19 @@ window.addEventListener('resize', () => {
   cam.updateProjectionMatrix();
 });
 
-// grid sits flat, viewed from above at an angle — looks like floor
+// grid sits flat further away, larger, lower — matches prototype look
 const gridGroup = new THREE.Group();
+gridGroup.position.set(0, -1.2, -2); // push further down and away
 scene.add(gridGroup);
 
-const grid = new THREE.GridHelper(3, 12, 0x4A9EFF, 0x1E3A5F);
+const grid = new THREE.GridHelper(5, 16, 0x4A9EFF, 0x1E3A5F);
 grid.material.transparent = true;
-grid.material.opacity = 0.6;
+grid.material.opacity = 0.55;
 gridGroup.add(grid);
 
 const floorMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(3, 3),
-  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.28, side:THREE.DoubleSide })
+  new THREE.PlaneGeometry(5, 5),
+  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.22, side:THREE.DoubleSide })
 );
 floorMesh.rotation.x = -Math.PI/2;
 gridGroup.add(floorMesh);
@@ -197,15 +198,15 @@ const CM = 0.01;
 
 // 9 spread out slots on the grid — no overlap
 const SLOTS = [
-  new THREE.Vector3(-0.8, 0, -0.8),
-  new THREE.Vector3( 0,   0, -0.8),
-  new THREE.Vector3( 0.8, 0, -0.8),
-  new THREE.Vector3(-0.8, 0,  0  ),
+  new THREE.Vector3(-1.2, 0, -1.2),
+  new THREE.Vector3( 0,   0, -1.2),
+  new THREE.Vector3( 1.2, 0, -1.2),
+  new THREE.Vector3(-1.2, 0,  0  ),
   new THREE.Vector3( 0,   0,  0  ),
-  new THREE.Vector3( 0.8, 0,  0  ),
-  new THREE.Vector3(-0.8, 0,  0.8),
-  new THREE.Vector3( 0,   0,  0.8),
-  new THREE.Vector3( 0.8, 0,  0.8),
+  new THREE.Vector3( 1.2, 0,  0  ),
+  new THREE.Vector3(-1.2, 0,  1.2),
+  new THREE.Vector3( 0,   0,  1.2),
+  new THREE.Vector3( 1.2, 0,  1.2),
 ];
 
 // START APP
