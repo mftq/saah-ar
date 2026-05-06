@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content"/>
   <title>سعة — AR Space Organizer</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Mono:wght@700&display=swap" rel="stylesheet"/>
@@ -11,17 +11,16 @@
     :root {
       --blue: #4A9EFF; --orange: #FF8C42; --green: #4ade80;
       --red: #f87171; --yellow: #facc15;
-      --bg: rgba(8,12,24,0.9); --border: rgba(74,158,255,0.2);
+      --bg: rgba(8,12,24,0.92); --border: rgba(74,158,255,0.2);
       --text: #E8F0FF; --muted: #4A6080;
     }
-    body { font-family: 'DM Sans', sans-serif; background: #000; color: var(--text); overflow: hidden; height: 100vh; width: 100vw; }
+    html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'DM Sans', sans-serif; background: #000; color: var(--text); }
 
-    /* ── splash ── */
-    #splash {
-      position: fixed; inset: 0; background: #080C18; z-index: 100;
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 16px; padding: 28px; text-align: center;
-    }
+    /* webxr canvas fills screen */
+    #c { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; display: none; }
+
+    /* splash */
+    #splash { position: fixed; inset: 0; background: #080C18; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 28px; text-align: center; }
     .logo-big { font-family: 'Space Mono', monospace; font-size: 52px; color: var(--blue); }
     .logo-big span { color: var(--orange); }
     .tagline { font-size: 13px; color: var(--muted); max-width: 260px; line-height: 1.6; }
@@ -30,30 +29,29 @@
     .step { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 7px; font-size: 13px; line-height: 1.4; }
     .sn { width: 20px; height: 20px; border-radius: 50%; background: rgba(74,158,255,0.15); border: 1px solid var(--blue); color: var(--blue); font-family: 'Space Mono', monospace; font-size: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .btn-start { width: 100%; max-width: 300px; background: var(--blue); color: white; border: none; border-radius: 13px; padding: 15px; font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 600; cursor: pointer; }
-
-    /* ios warning */
     #iosWarn { display: none; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 12px; padding: 14px; font-size: 13px; color: var(--red); line-height: 1.5; max-width: 300px; }
 
-    /* ── AR canvas fills screen ── */
-    #c { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; display: none; }
-
-    /* ── UI overlay ── */
+    /* UI overlay */
     #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: none; flex-direction: column; justify-content: space-between; }
 
-    .topbar { pointer-events: all; display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; background: var(--bg); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
-    .logo { font-family: 'Space Mono', monospace; font-size: 17px; color: var(--blue); }
+    /* top bar - moved badge to avoid camera cutout */
+    .topbar { pointer-events: all; display: flex; align-items: center; gap: 12px; padding: 13px 16px; background: var(--bg); backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+    .logo { font-family: 'Space Mono', monospace; font-size: 17px; color: var(--blue); margin-right: auto; }
     .logo em { color: var(--orange); font-style: normal; }
-    #capBadge { font-family: 'Space Mono', monospace; font-size: 11px; padding: 5px 11px; border-radius: 100px; background: rgba(74,158,255,0.1); border: 1px solid var(--border); color: var(--blue); }
+    #capBadge { font-family: 'Space Mono', monospace; font-size: 11px; padding: 5px 11px; border-radius: 100px; background: rgba(74,158,255,0.1); border: 1px solid var(--border); color: var(--blue); white-space: nowrap; }
 
-    /* scanning hint */
+    /* scan hint */
     #scanHint { pointer-events: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; transition: opacity 0.5s; }
-    .ring { width: 100px; height: 100px; border: 2px solid rgba(74,158,255,0.6); border-radius: 50%; margin: 0 auto 14px; animation: pulse 2s ease-in-out infinite; }
+    .ring { width: 90px; height: 90px; border: 2px solid rgba(74,158,255,0.6); border-radius: 50%; margin: 0 auto 12px; animation: pulse 2s ease-in-out infinite; }
     @keyframes pulse { 0%,100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.12); opacity: 0.3; } }
     .pill { background: var(--bg); backdrop-filter: blur(8px); border: 1px solid var(--border); border-radius: 100px; padding: 8px 16px; font-size: 12px; font-family: 'Space Mono', monospace; color: var(--text); }
 
     /* place button */
-    #placeBtn { pointer-events: all; position: fixed; bottom: 210px; left: 50%; transform: translateX(-50%); background: var(--blue); color: white; border: none; border-radius: 100px; padding: 14px 28px; font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; display: none; white-space: nowrap; animation: glow 2s ease-in-out infinite; }
+    #placeBtn { pointer-events: all; position: fixed; bottom: 230px; left: 50%; transform: translateX(-50%); background: var(--blue); color: white; border: none; border-radius: 100px; padding: 14px 28px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; display: none; white-space: nowrap; animation: glow 2s ease-in-out infinite; }
     @keyframes glow { 0%,100% { box-shadow: 0 0 20px rgba(74,158,255,0.4); } 50% { box-shadow: 0 0 50px rgba(74,158,255,0.9); } }
+
+    /* drag hint */
+    #dragHint { pointer-events: none; position: fixed; bottom: 230px; left: 50%; transform: translateX(-50%); background: var(--bg); border: 1px solid var(--border); border-radius: 100px; padding: 8px 16px; font-size: 12px; font-family: 'Space Mono', monospace; color: var(--text); display: none; white-space: nowrap; }
 
     /* fit panel */
     #fitPanel { pointer-events: none; position: fixed; top: 70px; right: 10px; background: var(--bg); backdrop-filter: blur(10px); border: 1px solid var(--border); border-radius: 11px; padding: 9px 13px; font-family: 'Space Mono', monospace; font-size: 11px; min-width: 138px; line-height: 1.7; }
@@ -65,26 +63,26 @@
     .tabs { display: flex; border-bottom: 1px solid var(--border); }
     .tab { flex: 1; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 10px 6px; cursor: pointer; transition: all 0.2s; text-align: center; }
     .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
-    .tp { display: none; padding: 13px 14px; } .tp.active { display: block; }
+    .tp { display: none; padding: 12px 14px; } .tp.active { display: block; }
     .fg { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 7px; margin-bottom: 9px; }
     .field label { display: block; font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
     .field input { width: 100%; background: rgba(10,14,26,0.9); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 8px 9px; font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; }
     .field input:focus { border-color: var(--blue); }
-    .sw { display: flex; align-items: center; gap: 7px; margin-bottom: 11px; flex-wrap: wrap; }
+    .sw { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; flex-wrap: wrap; }
     .sw label { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; }
     .dot { width: 23px; height: 23px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.15s, border-color 0.15s; display: inline-block; }
     .dot:hover { transform: scale(1.2); } .dot.sel { border-color: white; transform: scale(1.2); }
     .btn { border: none; border-radius: 9px; padding: 10px 13px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
     .btn:hover { opacity: 0.88; }
     .bf { width: 100%; } .bb { background: var(--blue); color: white; } .bo { background: var(--orange); color: white; }
-    .bg { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .bg2 { background: transparent; border: 1px solid var(--border); color: var(--muted); }
     .bd { background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: var(--red); }
-    #ol { max-height: 115px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; }
+    #ol { max-height: 110px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; }
     .oc { display: flex; align-items: center; gap: 9px; background: rgba(74,158,255,0.04); border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px; cursor: pointer; transition: all 0.2s; }
     .oc:hover { border-color: rgba(74,158,255,0.4); } .oc.active { border-color: var(--blue); background: rgba(74,158,255,0.08); }
     .od { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
     .oi { flex: 1; min-width: 0; } .on { font-size: 13px; font-weight: 500; } .odim { font-size: 10px; color: var(--muted); font-family: 'Space Mono', monospace; }
-    .ox { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 2px 5px; border-radius: 3px; }
+    .ox { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 2px 5px; }
     .ox:hover { color: var(--red); }
     .br { display: flex; gap: 7px; }
     .em { text-align: center; color: var(--muted); font-size: 12px; padding: 11px 0; font-family: 'Space Mono', monospace; }
@@ -93,45 +91,38 @@
 </head>
 <body>
 
-<!-- Three.js renders directly here - WebXR uses this canvas -->
 <canvas id="c"></canvas>
 
-<!-- splash screen -->
+<!-- splash -->
 <div id="splash">
   <div class="logo-big">سعة <span>·</span></div>
   <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--blue);letter-spacing:2px">AR SPACE ORGANIZER</div>
-  <div class="tagline">Point at any surface. Place virtual boxes. See what fits before you pack.</div>
-
-  <!-- iOS warning - shown automatically if iPhone detected -->
-  <div id="iosWarn">⚠️ iPhone detected. This app uses WebXR which requires Android + Chrome. Please open on an Android phone.</div>
-
+  <div class="tagline">Point at any surface. Place virtual boxes. See exactly what fits.</div>
+  <div id="iosWarn">⚠️ iPhone detected. This app needs Android + Chrome for AR. Open on Android.</div>
   <div class="steps">
     <h3>How to use</h3>
     <div class="step"><div class="sn">1</div><div>Tap <strong>Start AR</strong> and allow camera</div></div>
-    <div class="step"><div class="sn">2</div><div>Move camera over a flat surface until grid appears</div></div>
-    <div class="step"><div class="sn">3</div><div>Fill in object details and tap <strong>Place</strong></div></div>
-    <div class="step"><div class="sn">4</div><div>Tap placed objects to select and drag to move them</div></div>
+    <div class="step"><div class="sn">2</div><div>Point camera at a flat floor — grid appears</div></div>
+    <div class="step"><div class="sn">3</div><div>Enter object details and tap <strong>Place Object</strong></div></div>
+    <div class="step"><div class="sn">4</div><div>Tap a placed box to select it, then drag to move</div></div>
   </div>
-
   <button class="btn-start" onclick="startAR()">Start AR →</button>
 </div>
 
-<!-- UI overlay shown after AR starts -->
+<!-- UI overlay -->
 <div id="ui">
   <div class="topbar">
     <div class="logo">سعة <em>·</em> Sa'ah</div>
     <div id="capBadge">0 objects</div>
-    <div style="font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;text-align:right">AR Space<br/>Organizer</div>
   </div>
 
-  <!-- scanning hint shown while looking for surface -->
   <div id="scanHint">
     <div class="ring"></div>
-    <div class="pill" id="scanText">Move camera over a flat surface</div>
+    <div class="pill" id="scanText">Point camera at flat floor</div>
   </div>
 
-  <!-- tap to place button shown when surface found and object queued -->
-  <button id="placeBtn" onclick="placeObject()">👆 Tap to place object</button>
+  <button id="placeBtn" onclick="placeObject()">👆 Tap to place object here</button>
+  <div id="dragHint">✋ Tap a box to select · Drag to move</div>
 
   <div id="fitPanel">
     <h4>Fit Analysis</h4>
@@ -145,40 +136,37 @@
       <button class="tab"        onclick="st('space',this)">📐 Space</button>
     </div>
 
-    <!-- ADD TAB -->
     <div class="tp active" id="tab-add">
       <div class="fg">
-        <div class="field"><label>Name</label><input type="text" id="oN" placeholder="Clothes Box"/></div>
-        <div class="field"><label>W cm</label><input type="number" id="oW" placeholder="50" min="5"/></div>
-        <div class="field"><label>D cm</label><input type="number" id="oD" placeholder="40" min="5"/></div>
-        <div class="field"><label>H cm</label><input type="number" id="oH" placeholder="30" min="5"/></div>
+        <div class="field"><label>Name</label><input type="text" id="oN" placeholder="Clothes Box" inputmode="text"/></div>
+        <div class="field"><label>W cm</label><input type="number" id="oW" placeholder="50" min="5" inputmode="decimal"/></div>
+        <div class="field"><label>D cm</label><input type="number" id="oD" placeholder="40" min="5" inputmode="decimal"/></div>
+        <div class="field"><label>H cm</label><input type="number" id="oH" placeholder="30" min="5" inputmode="decimal"/></div>
       </div>
       <div class="sw"><label>Color</label><div id="sr"></div></div>
       <button class="btn bb bf" onclick="queueObj()">Place Object in AR →</button>
     </div>
 
-    <!-- LIST TAB -->
     <div class="tp" id="tab-list">
       <div id="ol"><div class="em">No objects yet!</div></div>
       <div class="br">
-        <button class="btn bg" style="flex:1;font-size:12px" onclick="rmSel()">✕ Remove</button>
-        <button class="btn bd" style="flex:1;font-size:12px" onclick="clrAll()">🗑 Clear All</button>
+        <button class="btn bg2" style="flex:1;font-size:12px" onclick="rmSel()">✕ Remove Selected</button>
+        <button class="btn bd"  style="flex:1;font-size:12px" onclick="clrAll()">🗑 Clear All</button>
       </div>
     </div>
 
-    <!-- SPACE TAB -->
     <div class="tp" id="tab-space">
-      <p style="font-size:11px;color:var(--muted);margin-bottom:9px;font-family:'Space Mono',monospace">Real dimensions of your space:</p>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:9px;font-family:'Space Mono',monospace">Real size of the space you are filling:</p>
       <div class="br" style="margin-bottom:9px;flex-wrap:wrap;gap:5px">
-        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(120,100,80)">🚗 Car</button>
-        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(35,20,45)">🎒 Bag</button>
-        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(50,25,70)">🧳 Case</button>
-        <button class="btn bg" style="font-size:12px;padding:6px 9px" onclick="sp(90,40,200)">📦 Shelf</button>
+        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(120,100,80)">🚗 Car Boot</button>
+        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(35,20,45)">🎒 Backpack</button>
+        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(50,25,70)">🧳 Suitcase</button>
+        <button class="btn bg2" style="font-size:12px;padding:6px 9px" onclick="sp(90,40,200)">📦 Shelf</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:9px">
-        <div class="field"><label>W cm</label><input type="number" id="sW" value="120"/></div>
-        <div class="field"><label>D cm</label><input type="number" id="sD" value="100"/></div>
-        <div class="field"><label>H cm</label><input type="number" id="sH" value="80"/></div>
+        <div class="field"><label>W cm</label><input type="number" id="sW" value="120" inputmode="decimal"/></div>
+        <div class="field"><label>D cm</label><input type="number" id="sD" value="100" inputmode="decimal"/></div>
+        <div class="field"><label>H cm</label><input type="number" id="sH" value="80"  inputmode="decimal"/></div>
       </div>
       <button class="btn bo bf" onclick="apSp()">Apply Space Size</button>
     </div>
@@ -186,27 +174,23 @@
 </div>
 
 <script>
-// show iOS warning if needed
-if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-  document.getElementById('iosWarn').style.display = 'block';
-}
+// show iOS warning
+if (/iPad|iPhone|iPod/.test(navigator.userAgent)) document.getElementById('iosWarn').style.display = 'block';
 
 // ══════════════════════════════════════
-// THREE.JS + WEBXR SETUP
+// THREE.JS + WEBXR
 // ══════════════════════════════════════
-const canvas = document.getElementById('c');
-
-// Three.js renderer with WebXR enabled
+const canvas   = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.xr.enabled = true; // THIS enables WebXR on the renderer
+renderer.xr.enabled = true; // enables WebXR
 
-const scene = new THREE.Scene();
+const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-// lighting
-scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+// lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
 const dl = new THREE.DirectionalLight(0xffffff, 0.5);
 dl.position.set(1, 3, 2);
 scene.add(dl);
@@ -217,143 +201,125 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
 });
 
-// ══════════════════════════════════════
-// RETICLE — the ring that follows the detected surface
-// This is the key to markerless AR:
-// WebXR hit-test finds the surface, reticle shows where it is
-// ══════════════════════════════════════
-const reticleGeo = new THREE.RingGeometry(0.08, 0.10, 32).rotateX(-Math.PI / 2);
-const reticleMat = new THREE.MeshBasicMaterial({ color: 0x4A9EFF, opacity: 0.9, transparent: true });
-const reticle    = new THREE.Mesh(reticleGeo, reticleMat);
-reticle.matrixAutoUpdate = false; // we update its position manually from hit-test
+// ── reticle (follows the detected floor) ──
+const reticle = new THREE.Mesh(
+  new THREE.RingGeometry(0.06, 0.08, 32).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0x4A9EFF, opacity: 0.9, transparent: true, side: THREE.DoubleSide })
+);
+reticle.matrixAutoUpdate = false;
 reticle.visible = false;
 scene.add(reticle);
 
-// ══════════════════════════════════════
-// GRID — appears on the detected surface
-// ══════════════════════════════════════
-const gridHelper = new THREE.GridHelper(2, 10, 0x4A9EFF, 0x1E3A5F);
-gridHelper.material.opacity    = 0.6;
-gridHelper.material.transparent = true;
-gridHelper.visible = false; // hidden until surface detected
-scene.add(gridHelper);
+// ── grid (appears on the detected floor) ──
+const grid = new THREE.GridHelper(2, 10, 0x4A9EFF, 0x1E3A5F);
+grid.material.transparent = true;
+grid.material.opacity = 0.55;
+grid.visible = false;
+scene.add(grid);
 
 // floor plane under the grid
-const floorMesh = new THREE.Mesh(
+const floorPlane = new THREE.Mesh(
   new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2),
-  new THREE.MeshBasicMaterial({ color: 0x080C18, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+  new THREE.MeshBasicMaterial({ color: 0x080C18, transparent: true, opacity: 0.28, side: THREE.DoubleSide })
 );
-floorMesh.visible = false;
-scene.add(floorMesh);
+floorPlane.visible = false;
+scene.add(floorPlane);
 
 // ══════════════════════════════════════
 // APP STATE
 // ══════════════════════════════════════
 const S = {
-  objects:   [],
-  selId:     null,
-  nextId:    1,
-  color:     '#4A9EFF',
-  queued:    null,       // object waiting to be placed
-  hitPos:    null,       // current reticle world position
-  hitNormal: null,       // surface normal at hit point
-  selMesh:   null,       // selected Three.js mesh for dragging
-  space:     { w:120, d:100, h:80 },
-  colors:    ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
+  objects:  [],
+  selId:    null,
+  nextId:   1,
+  color:    '#4A9EFF',
+  queued:   null,
+  hitPos:   null,       // where reticle is on floor
+  floorY:   0,          // Y position of detected floor
+  space:    { w:120, d:100, h:80 },
+  colors:   ['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
+
+  // dragging state
+  dragging:   false,
+  dragObjId:  null,
+  dragStartX: 0,
+  dragStartZ: 0,
 };
 
-const CM = 0.01; // 1 cm = 0.01 meters
+const CM = 0.01; // 1 cm = 0.01 meters in WebXR
 
 // ══════════════════════════════════════
-// START AR — enter WebXR session
+// START AR
 // ══════════════════════════════════════
 async function startAR() {
-  // check if WebXR hit-test is supported
-  if (!navigator.xr) {
-    alert('WebXR not supported on this browser. Please use Chrome on Android.');
-    return;
-  }
+  if (!navigator.xr) { alert('WebXR not supported. Use Chrome on Android.'); return; }
 
-  const supported = await navigator.xr.isSessionSupported('immersive-ar');
-  if (!supported) {
-    alert('AR not supported on this device. Please use Chrome on Android with ARCore installed.');
-    return;
-  }
+  const ok = await navigator.xr.isSessionSupported('immersive-ar');
+  if (!ok) { alert('AR not supported on this device. Use Chrome on Android with ARCore.'); return; }
 
-  // request AR session with hit-test and dom-overlay features
   const session = await navigator.xr.requestSession('immersive-ar', {
     requiredFeatures: ['hit-test'],
     optionalFeatures: ['dom-overlay'],
     domOverlay: { root: document.getElementById('ui') },
   });
 
-  // connect session to Three.js renderer
   renderer.xr.setReferenceSpaceType('local');
   await renderer.xr.setSession(session);
 
-  // show canvas and UI
   canvas.style.display = 'block';
   const ui = document.getElementById('ui');
   ui.style.display = 'flex';
   document.getElementById('splash').style.display = 'none';
 
-  // set up hit-test source (this detects the floor surface every frame)
-  let hitTestSource     = null;
-  let hitTestSourceInit = false;
+  // tap fires when user taps screen in AR
+  session.addEventListener('select', onARTap);
 
-  // handle tap/select events in AR (fires when user taps screen)
-  session.addEventListener('select', onSelect);
+  let hitSource = null;
+  let hitInited = false;
 
-  // set up the render loop
-  renderer.setAnimationLoop((timestamp, frame) => {
+  // render loop
+  renderer.setAnimationLoop((time, frame) => {
     if (!frame) return;
 
     const refSpace = renderer.xr.getReferenceSpace();
 
-    // set up hit test source on the first frame
-    if (!hitTestSourceInit) {
-      session.requestReferenceSpace('viewer').then(viewerSpace => {
-        session.requestHitTestSource({ space: viewerSpace }).then(source => {
-          hitTestSource = source;
-        });
+    // init hit test on first frame
+    if (!hitInited) {
+      session.requestReferenceSpace('viewer').then(vs => {
+        session.requestHitTestSource({ space: vs }).then(src => { hitSource = src; });
       });
-      hitTestSourceInit = true;
+      hitInited = true;
     }
 
-    // get hit test results — where is the camera pointing on the floor?
-    if (hitTestSource) {
-      const results = frame.getHitTestResults(hitTestSource);
+    if (hitSource) {
+      const hits = frame.getHitTestResults(hitSource);
+      if (hits.length > 0) {
+        const pose = hits[0].getPose(refSpace);
+        if (pose) {
+          // update reticle to follow floor
+          reticle.visible = true;
+          reticle.matrix.fromArray(pose.transform.matrix);
 
-      if (results.length > 0) {
-        // surface found!
-        const hit  = results[0];
-        const pose = hit.getPose(refSpace);
+          // get world position of the hit
+          const p = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+          S.hitPos = p;
+          S.floorY = p.y; // remember floor height
 
-        // update reticle position to follow the surface
-        reticle.visible = true;
-        reticle.matrix.fromArray(pose.transform.matrix);
+          // move grid and floor to this position
+          grid.position.set(p.x, p.y + 0.001, p.z);
+          grid.visible = true;
+          floorPlane.position.set(p.x, p.y + 0.0005, p.z);
+          floorPlane.visible = true;
 
-        // extract position from the matrix for placing objects
-        S.hitPos = new THREE.Vector3();
-        S.hitPos.setFromMatrixPosition(reticle.matrix);
+          // hide scan hint
+          document.getElementById('scanHint').style.opacity = '0';
 
-        // move grid to follow the detected surface
-        gridHelper.position.copy(S.hitPos);
-        gridHelper.visible = true;
-        floorMesh.position.copy(S.hitPos);
-        floorMesh.visible = true;
-
-        // hide the scan hint once surface is found
-        document.getElementById('scanHint').style.opacity = '0';
-
-        // show place button if object is queued
-        if (S.queued) {
-          document.getElementById('placeBtn').style.display = 'block';
+          // show place button if object queued
+          if (S.queued) document.getElementById('placeBtn').style.display = 'block';
+          if (S.objects.length > 0) document.getElementById('dragHint').style.display = 'block';
         }
-
       } else {
-        // no surface found - show scan hint
-        reticle.visible  = false;
+        reticle.visible = false;
         document.getElementById('scanHint').style.opacity = '1';
         document.getElementById('placeBtn').style.display = 'none';
       }
@@ -364,17 +330,17 @@ async function startAR() {
 }
 
 // ══════════════════════════════════════
-// ON SELECT — fires on screen tap in AR
+// ON AR TAP — place object if queued
 // ══════════════════════════════════════
-function onSelect() {
-  // if object is queued and surface found, place it
-  if (S.queued && S.hitPos) {
+function onARTap() {
+  // only auto-place if object is queued AND no object is being dragged
+  if (S.queued && S.hitPos && !S.dragging) {
     placeObject();
   }
 }
 
 // ══════════════════════════════════════
-// QUEUE OBJECT
+// QUEUE OBJECT — ready to place
 // ══════════════════════════════════════
 function queueObj() {
   const name = document.getElementById('oN').value.trim() || 'Box';
@@ -382,20 +348,17 @@ function queueObj() {
   const d    = parseFloat(document.getElementById('oD').value);
   const h    = parseFloat(document.getElementById('oH').value);
 
-  if (!w || !d || !h) { alert('Please enter W, D, and H!'); return; }
+  if (!w || !d || !h) { alert('Please enter W, D, and H dimensions!'); return; }
 
   S.queued = { name, w, d, h, color: S.color };
 
   const btn = document.getElementById('placeBtn');
-  btn.textContent   = `👆 Tap surface to place "${name}"`;
-  // show button only if surface already found
+  btn.textContent = `👆 Tap floor to place "${name}"`;
   if (S.hitPos) btn.style.display = 'block';
-
-  document.getElementById('scanText').textContent = 'Point at floor then tap to place';
 }
 
 // ══════════════════════════════════════
-// PLACE OBJECT on the detected surface
+// PLACE OBJECT at reticle position
 // ══════════════════════════════════════
 function placeObject() {
   if (!S.queued || !S.hitPos) return;
@@ -405,29 +368,40 @@ function placeObject() {
   S.objects.push({ id, ...obj });
   S.queued = null;
 
+  // convert cm to meters
   const aw = obj.w * CM;
   const ad = obj.d * CM;
   const ah = obj.h * CM;
 
-  // create geometry
   const geo = new THREE.BoxGeometry(aw, ah, ad);
 
-  // solid box
-  const solidMat = new THREE.MeshPhongMaterial({ color: new THREE.Color(obj.color), transparent: true, opacity: 0.72 });
-  const solidBox = new THREE.Mesh(geo, solidMat);
+  // solid transparent box
+  const solidMat = new THREE.MeshPhongMaterial({
+    color: new THREE.Color(obj.color),
+    transparent: true,
+    opacity: 0.70,
+  });
+  const solid = new THREE.Mesh(geo, solidMat);
 
   // wireframe overlay
   const wireMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(obj.color), wireframe: true });
-  const wireBox = new THREE.Mesh(geo, wireMat);
+  const wire    = new THREE.Mesh(geo, wireMat);
 
   const group = new THREE.Group();
   group.name  = 'obj-' + id;
+  group.userData.id = id;
 
-  // place on the detected surface, half height up so it sits on the floor
-  group.position.set(S.hitPos.x, S.hitPos.y + ah / 2, S.hitPos.z);
+  // place box ON the floor surface, offset so it doesn't overlap previous box
+  // spread objects slightly apart using a small offset based on count
+  const offset = (S.objects.length - 1) * (aw + 0.05);
+  group.position.set(
+    S.hitPos.x + (offset % 0.5) - 0.25, // wrap around after a few boxes
+    S.floorY + ah / 2,                   // sit on floor
+    S.hitPos.z
+  );
 
-  group.add(solidBox);
-  group.add(wireBox);
+  group.add(solid);
+  group.add(wire);
   scene.add(group);
 
   // clear inputs
@@ -436,10 +410,86 @@ function placeObject() {
   document.getElementById('oD').value = '';
   document.getElementById('oH').value = '';
   document.getElementById('placeBtn').style.display = 'none';
+  document.getElementById('dragHint').style.display = 'block';
 
   renderList();
   updFit();
 }
+
+// ══════════════════════════════════════
+// TOUCH DRAG TO MOVE OBJECTS
+// User taps a box to select it, then drags to move it along the floor
+// ══════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+
+function getTouchNDC(touch) {
+  // convert touch position to normalized device coordinates (-1 to 1)
+  return new THREE.Vector2(
+    (touch.clientX / window.innerWidth)  *  2 - 1,
+    (touch.clientY / window.innerHeight) * -2 + 1
+  );
+}
+
+// get all placed box groups
+function getBoxGroups() {
+  return S.objects.map(o => scene.getObjectByName('obj-' + o.id)).filter(Boolean);
+}
+
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  const touch = e.touches[0];
+
+  // check if touch hits any box
+  raycaster.setFromCamera(getTouchNDC(touch), camera);
+  const boxes = getBoxGroups();
+  const hits  = raycaster.intersectObjects(boxes, true);
+
+  if (hits.length > 0) {
+    // find the parent group
+    let obj = hits[0].object;
+    while (obj.parent && !obj.userData.id) obj = obj.parent;
+
+    S.dragging   = true;
+    S.dragObjId  = obj.userData.id;
+    S.selId      = obj.userData.id;
+    S.dragStartX = touch.clientX;
+    S.dragStartZ = touch.clientY;
+
+    renderList();
+    e.preventDefault();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  if (!S.dragging || !S.dragObjId) return;
+  e.preventDefault();
+
+  const touch = e.touches[0];
+  const group = scene.getObjectByName('obj-' + S.dragObjId);
+  if (!group) return;
+
+  // calculate movement delta in screen pixels
+  const dx = touch.clientX - S.dragStartX;
+  const dz = touch.clientY - S.dragStartZ;
+
+  // convert screen delta to world units
+  // scale factor: approx 1 pixel = 0.002 meters at typical AR viewing distance
+  const worldScale = 0.003;
+  group.position.x += dx * worldScale;
+  group.position.z += dz * worldScale;
+
+  // keep on floor
+  const obj = S.objects.find(o => o.id === S.dragObjId);
+  if (obj) group.position.y = S.floorY + (obj.h * CM) / 2;
+
+  S.dragStartX = touch.clientX;
+  S.dragStartZ = touch.clientY;
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => {
+  S.dragging  = false;
+  S.dragObjId = null;
+});
 
 // ══════════════════════════════════════
 // COLOR SWATCHES
@@ -450,11 +500,7 @@ function buildSwatches() {
     const d = document.createElement('div');
     d.className = 'dot' + (c === S.color ? ' sel' : '');
     d.style.background = c;
-    d.onclick = () => {
-      document.querySelectorAll('.dot').forEach(x => x.classList.remove('sel'));
-      d.classList.add('sel');
-      S.color = c;
-    };
+    d.onclick = () => { document.querySelectorAll('.dot').forEach(x => x.classList.remove('sel')); d.classList.add('sel'); S.color = c; };
     row.appendChild(d);
   });
 }
@@ -480,7 +526,7 @@ function apSp() { S.space.w = +document.getElementById('sW').value||120; S.space
 // SELECT / REMOVE
 // ══════════════════════════════════════
 function selObj(id) { S.selId = id; renderList(); }
-function rmSel() { if (!S.selId) { alert('Select an object first!'); return; } rmById(S.selId); }
+function rmSel() { if (!S.selId) { alert('Select an object from the list first!'); return; } rmById(S.selId); }
 function rmById(id) {
   const g = scene.getObjectByName('obj-' + id);
   if (g) scene.remove(g);
