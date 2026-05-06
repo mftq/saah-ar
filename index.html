@@ -138,11 +138,8 @@
   </div>
 </div>
 
-<!-- REPLACE ONLY THE <script> SECTION WITH THIS -->
-<script type="module">
+<script>
 // THREE.JS — transparent canvas on top of camera video
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128/build/three.module.js';
-
 const canvas   = document.getElementById('c');
 
 const renderer = new THREE.WebGLRenderer({
@@ -153,12 +150,11 @@ const renderer = new THREE.WebGLRenderer({
 
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.xr.enabled = true;
 renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
 
-// camera
+// camera looks natural now
 const cam = new THREE.PerspectiveCamera(
   60,
   window.innerWidth/window.innerHeight,
@@ -166,18 +162,25 @@ const cam = new THREE.PerspectiveCamera(
   100
 );
 
+cam.position.set(0,1.5,2);
+cam.lookAt(0,0,0);
+
 scene.add(cam);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+scene.add(new THREE.AmbientLight(0xffffff,0.9));
 
-const dl = new THREE.DirectionalLight(0xffffff, 0.5);
+const dl = new THREE.DirectionalLight(0xffffff,0.6);
 dl.position.set(2,5,2);
 scene.add(dl);
 
 window.addEventListener('resize', () => {
+
   renderer.setSize(window.innerWidth, window.innerHeight);
+
   cam.aspect = window.innerWidth/window.innerHeight;
+
   cam.updateProjectionMatrix();
+
 });
 
 // grid group
@@ -185,10 +188,16 @@ const gridGroup = new THREE.Group();
 scene.add(gridGroup);
 
 // DYNAMIC GRID
-const grid = new THREE.GridHelper(3,12,0x4A9EFF,0x1E3A5F);
+const grid = new THREE.GridHelper(
+  3,
+  12,
+  0x4A9EFF,
+  0x1E3A5F
+);
+
 grid.material.transparent = true;
-grid.material.opacity = 0.6;
-grid.visible = false;
+grid.material.opacity = 0.7;
+
 gridGroup.add(grid);
 
 const floorMesh = new THREE.Mesh(
@@ -202,87 +211,26 @@ const floorMesh = new THREE.Mesh(
 );
 
 floorMesh.rotation.x = -Math.PI/2;
-floorMesh.visible = false;
+
 gridGroup.add(floorMesh);
 
-// WEBXR
-let xrSession = null;
-let hitTestSource = null;
-let hitTestSourceRequested = false;
-let localSpace = null;
-let viewerSpace = null;
-let currentHitMatrix = null;
+// smooth floating animation
+let targetGridX = 0;
+let targetGridZ = 0;
 
-// render loop
-renderer.setAnimationLoop(render);
+function animate(){
 
-function render(timestamp, frame){
+  requestAnimationFrame(animate);
 
-  if(frame){
-
-    const referenceSpace = renderer.xr.getReferenceSpace();
-    const session = renderer.xr.getSession();
-
-    if(hitTestSourceRequested === false){
-
-      session.requestReferenceSpace('viewer').then(space => {
-
-        viewerSpace = space;
-
-        session.requestHitTestSource({
-          space: viewerSpace
-        }).then(source => {
-
-          hitTestSource = source;
-
-        });
-
-      });
-
-      session.requestReferenceSpace('local').then(space => {
-
-        localSpace = space;
-
-      });
-
-      session.addEventListener('end', () => {
-
-        hitTestSourceRequested = false;
-        hitTestSource = null;
-
-      });
-
-      hitTestSourceRequested = true;
-    }
-
-    if(hitTestSource && localSpace){
-
-      const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-      if(hitTestResults.length){
-
-        const hit = hitTestResults[0];
-
-        const pose = hit.getPose(localSpace);
-
-        currentHitMatrix = pose.transform.matrix;
-
-        grid.visible = true;
-        floorMesh.visible = true;
-
-        gridGroup.matrix.fromArray(currentHitMatrix);
-        gridGroup.matrix.decompose(
-          gridGroup.position,
-          gridGroup.quaternion,
-          gridGroup.scale
-        );
-
-      }
-    }
-  }
+  // smooth movement
+  gridGroup.position.x += (targetGridX - gridGroup.position.x) * 0.08;
+  gridGroup.position.z += (targetGridZ - gridGroup.position.z) * 0.08;
 
   renderer.render(scene,cam);
+
 }
+
+animate();
 
 // APP STATE
 const S = {
@@ -291,6 +239,7 @@ const S = {
   nextId:1,
   color:'#4A9EFF',
   queued:null,
+
   space:{ w:120,d:100,h:80 },
 
   colors:[
@@ -313,39 +262,46 @@ const S = {
 const CM = 0.01;
 
 // START APP
-async function startApp() {
+async function startApp(){
 
-  try {
+  try{
 
-    const supported = await navigator.xr.isSessionSupported('immersive-ar');
-
-    if(!supported){
-      alert('WebXR AR not supported on this device/browser');
-      return;
-    }
-
-    xrSession = await navigator.xr.requestSession('immersive-ar', {
-      requiredFeatures:['hit-test','local-floor']
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{
+        facingMode:{ ideal:'environment' },
+        width:{ ideal:1280 },
+        height:{ ideal:720 }
+      }
     });
 
-    renderer.xr.setReferenceSpaceType('local');
-    await renderer.xr.setSession(xrSession);
+    const vid = document.getElementById('cam');
 
-    document.getElementById('splash').style.display = 'none';
-    document.getElementById('ui').style.display = 'flex';
+    vid.srcObject = stream;
 
-  } catch(e){
+    vid.onloadedmetadata = () => {
 
-    console.error(e);
-    alert('AR failed to start');
+      document.getElementById('splash').style.display='none';
+
+      document.getElementById('ui').style.display='flex';
+
+    };
 
   }
+
+  catch(e){
+
+    console.error(e);
+
+    alert('Camera permission required!');
+
+  }
+
 }
 
 window.startApp = startApp;
 
 // SWATCHES
-function buildSwatches() {
+function buildSwatches(){
 
   const row = document.getElementById('sr');
 
@@ -363,7 +319,7 @@ function buildSwatches() {
 
       d.classList.add('sel');
 
-      S.color=c;
+      S.color = c;
 
     };
 
@@ -375,7 +331,7 @@ function buildSwatches() {
 
 buildSwatches();
 
-function st(name,btn) {
+function st(name,btn){
 
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('active'));
 
@@ -418,12 +374,15 @@ function queueObj(){
   const name=document.getElementById('oN').value.trim()||'Box';
 
   const w=parseFloat(document.getElementById('oW').value);
+
   const d=parseFloat(document.getElementById('oD').value);
+
   const h=parseFloat(document.getElementById('oH').value);
 
   if(!w||!d||!h){
 
     alert('Please enter W, D, and H!');
+
     return;
 
   }
@@ -444,9 +403,10 @@ window.queueObj = queueObj;
 
 function placeObj(){
 
-  if(!S.queued || !currentHitMatrix) return;
+  if(!S.queued) return;
 
   const obj=S.queued;
+
   const id=S.nextId++;
 
   const aw=obj.w*CM;
@@ -479,14 +439,12 @@ function placeObj(){
   group.add(solid);
   group.add(wire);
 
-  const tempMatrix = new THREE.Matrix4();
-  tempMatrix.fromArray(currentHitMatrix);
-
-  const pos = new THREE.Vector3();
-  pos.setFromMatrixPosition(tempMatrix);
-
-  group.position.copy(pos);
-  group.position.y += ah/2;
+  // place in front of camera dynamically
+  group.position.set(
+    gridGroup.position.x,
+    ah/2,
+    gridGroup.position.z
+  );
 
   scene.add(group);
 
@@ -504,11 +462,24 @@ function placeObj(){
   document.getElementById('dragHint').style.display='block';
 
   renderList();
+
   updFit();
 
 }
 
 window.placeObj = placeObj;
+
+// TOUCH SURFACE TRACKING FEEL
+window.addEventListener('deviceorientation', e => {
+
+  const gamma = e.gamma || 0;
+  const beta  = e.beta  || 0;
+
+  targetGridX = gamma * 0.01;
+
+  targetGridZ = (beta - 45) * 0.01;
+
+});
 
 // TOUCH DRAG
 const raycaster = new THREE.Raycaster();
@@ -580,8 +551,8 @@ canvas.addEventListener('touchmove',e=>{
 
   if(!group) return;
 
-  const dx=(t.clientX-S.lastTX)*0.002;
-  const dz=(t.clientY-S.lastTY)*0.002;
+  const dx=(t.clientX-S.lastTX)*0.004;
+  const dz=(t.clientY-SlastTY)*0.004;
 
   group.position.x+=dx;
   group.position.z+=dz;
@@ -601,6 +572,7 @@ canvas.addEventListener('touchend',()=>{
 function selObj(id){
 
   S.selId=id;
+
   renderList();
 
 }
@@ -612,6 +584,7 @@ function rmSel(){
   if(!S.selId){
 
     alert('Select an object first!');
+
     return;
 
   }
@@ -633,6 +606,7 @@ function rmById(id){
   if(S.selId===id) S.selId=null;
 
   renderList();
+
   updFit();
 
 }
@@ -658,6 +632,7 @@ function clrAll(){
   S.selId=null;
 
   renderList();
+
   updFit();
 
 }
@@ -674,6 +649,7 @@ function renderList(){
   if(!S.objects.length){
 
     list.innerHTML='<div class="em">No objects placed yet!</div>';
+
     return;
 
   }
@@ -716,6 +692,7 @@ function updFit(){
   if(!S.objects.length){
 
     el.className='ok';
+
     el.textContent='Add objects to start';
 
     return;
@@ -725,6 +702,7 @@ function updFit(){
   if(pct<60){
 
     el.className='ok';
+
     el.textContent=`✓ ${pct}% full — fits!`;
 
   }
@@ -732,6 +710,7 @@ function updFit(){
   else if(pct<85){
 
     el.className='warn';
+
     el.textContent=`⚠ ${pct}% — getting tight`;
 
   }
@@ -739,9 +718,11 @@ function updFit(){
   else{
 
     el.className='bad';
+
     el.textContent=`✗ ${pct}% — won't fit!`;
 
   }
+
 }
 </script>
 </body>
