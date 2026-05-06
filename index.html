@@ -325,10 +325,9 @@ async function startAR() {
             // move grid to this surface position
             gridGroup.position.copy(p);
 
-            // rotate grid to match surface normal
-            const m  = new THREE.Matrix4().fromArray(pose.transform.matrix);
-            const quat = new THREE.Quaternion().setFromRotationMatrix(m);
-            gridGroup.quaternion.copy(quat);
+            // keep grid always horizontal (flat) regardless of surface normal
+            // this makes it look like a top-down floor view
+            gridGroup.rotation.set(0, 0, 0);
 
             gridMesh.visible  = true;
             floorMesh.visible = true;
