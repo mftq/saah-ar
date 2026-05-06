@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content"/>
   <title>ARuler — AR Space Measurer</title>
 
   <!--
@@ -151,6 +151,7 @@
       border: 1px solid var(--border);
       border-radius: 100px;
       padding: 4px;
+      z-index: 20; /* make sure tabs are always on top */
     }
 
     .mode-tab {
@@ -177,6 +178,8 @@
       backdrop-filter: blur(20px);
       border-top: 1px solid var(--border);
       padding: 14px 16px;
+      max-height: 175px;
+      overflow-y: auto;
     }
 
     /* instructions */
@@ -265,6 +268,10 @@
   vr-mode-ui="enabled: false"
   renderer="logarithmicDepthBuffer: true; antialias: true;"
 >
+  <style>
+    /* fix camera video to fill screen properly */
+    video { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; object-fit: cover !important; }
+  </style>
   <a-marker
     id="hiroMarker"
     preset="hiro"
