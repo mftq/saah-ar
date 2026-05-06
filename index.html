@@ -138,24 +138,40 @@
   </div>
 </div>
 
-<script>
+<!-- REPLACE ONLY THE <script> SECTION WITH THIS -->
+<script type="module">
 // THREE.JS — transparent canvas on top of camera video
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128/build/three.module.js';
+
 const canvas   = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, alpha:true, antialias:true });
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  alpha:true,
+  antialias:true
+});
+
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
 renderer.setClearColor(0x000000, 0);
 
 const scene = new THREE.Scene();
 
-// camera looks at the grid from a natural phone-holding angle
-const cam = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.01, 100);
-cam.position.set(0, 2.5, 1.5);
-cam.lookAt(0, 0, -0.5);
+// camera
+const cam = new THREE.PerspectiveCamera(
+  60,
+  window.innerWidth/window.innerHeight,
+  0.01,
+  100
+);
+
+scene.add(cam);
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+
 const dl = new THREE.DirectionalLight(0xffffff, 0.5);
-dl.position.set(2, 5, 2);
+dl.position.set(2,5,2);
 scene.add(dl);
 
 window.addEventListener('resize', () => {
@@ -164,214 +180,568 @@ window.addEventListener('resize', () => {
   cam.updateProjectionMatrix();
 });
 
-// grid sits flat, viewed from above at an angle — looks like floor
+// grid group
 const gridGroup = new THREE.Group();
 scene.add(gridGroup);
 
-const grid = new THREE.GridHelper(3, 12, 0x4A9EFF, 0x1E3A5F);
+// DYNAMIC GRID
+const grid = new THREE.GridHelper(3,12,0x4A9EFF,0x1E3A5F);
 grid.material.transparent = true;
 grid.material.opacity = 0.6;
+grid.visible = false;
 gridGroup.add(grid);
 
 const floorMesh = new THREE.Mesh(
-  new THREE.PlaneGeometry(3, 3),
-  new THREE.MeshBasicMaterial({ color:0x080C18, transparent:true, opacity:0.28, side:THREE.DoubleSide })
+  new THREE.PlaneGeometry(3,3),
+  new THREE.MeshBasicMaterial({
+    color:0x080C18,
+    transparent:true,
+    opacity:0.28,
+    side:THREE.DoubleSide
+  })
 );
+
 floorMesh.rotation.x = -Math.PI/2;
+floorMesh.visible = false;
 gridGroup.add(floorMesh);
 
+// WEBXR
+let xrSession = null;
+let hitTestSource = null;
+let hitTestSourceRequested = false;
+let localSpace = null;
+let viewerSpace = null;
+let currentHitMatrix = null;
+
 // render loop
-function animate() { requestAnimationFrame(animate); renderer.render(scene, cam); }
-animate();
+renderer.setAnimationLoop(render);
+
+function render(timestamp, frame){
+
+  if(frame){
+
+    const referenceSpace = renderer.xr.getReferenceSpace();
+    const session = renderer.xr.getSession();
+
+    if(hitTestSourceRequested === false){
+
+      session.requestReferenceSpace('viewer').then(space => {
+
+        viewerSpace = space;
+
+        session.requestHitTestSource({
+          space: viewerSpace
+        }).then(source => {
+
+          hitTestSource = source;
+
+        });
+
+      });
+
+      session.requestReferenceSpace('local').then(space => {
+
+        localSpace = space;
+
+      });
+
+      session.addEventListener('end', () => {
+
+        hitTestSourceRequested = false;
+        hitTestSource = null;
+
+      });
+
+      hitTestSourceRequested = true;
+    }
+
+    if(hitTestSource && localSpace){
+
+      const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+      if(hitTestResults.length){
+
+        const hit = hitTestResults[0];
+
+        const pose = hit.getPose(localSpace);
+
+        currentHitMatrix = pose.transform.matrix;
+
+        grid.visible = true;
+        floorMesh.visible = true;
+
+        gridGroup.matrix.fromArray(currentHitMatrix);
+        gridGroup.matrix.decompose(
+          gridGroup.position,
+          gridGroup.quaternion,
+          gridGroup.scale
+        );
+
+      }
+    }
+  }
+
+  renderer.render(scene,cam);
+}
 
 // APP STATE
 const S = {
-  objects:[], selId:null, nextId:1,
-  color:'#4A9EFF', queued:null,
-  space:{ w:120, d:100, h:80 },
-  colors:['#4A9EFF','#FF8C42','#4ade80','#f472b6','#facc15','#a78bfa','#f87171','#34d399'],
-  dragging:false, dragId:null, lastTX:0, lastTY:0,
+  objects:[],
+  selId:null,
+  nextId:1,
+  color:'#4A9EFF',
+  queued:null,
+  space:{ w:120,d:100,h:80 },
+
+  colors:[
+    '#4A9EFF',
+    '#FF8C42',
+    '#4ade80',
+    '#f472b6',
+    '#facc15',
+    '#a78bfa',
+    '#f87171',
+    '#34d399'
+  ],
+
+  dragging:false,
+  dragId:null,
+  lastTX:0,
+  lastTY:0,
 };
 
 const CM = 0.01;
 
-// 9 spread out slots on the grid — no overlap
-const SLOTS = [
-  new THREE.Vector3(-0.8, 0, -0.8),
-  new THREE.Vector3( 0,   0, -0.8),
-  new THREE.Vector3( 0.8, 0, -0.8),
-  new THREE.Vector3(-0.8, 0,  0  ),
-  new THREE.Vector3( 0,   0,  0  ),
-  new THREE.Vector3( 0.8, 0,  0  ),
-  new THREE.Vector3(-0.8, 0,  0.8),
-  new THREE.Vector3( 0,   0,  0.8),
-  new THREE.Vector3( 0.8, 0,  0.8),
-];
-
 // START APP
 async function startApp() {
+
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{ facingMode:{ ideal:'environment' }, width:{ ideal:1280 }, height:{ ideal:720 } }
+
+    const supported = await navigator.xr.isSessionSupported('immersive-ar');
+
+    if(!supported){
+      alert('WebXR AR not supported on this device/browser');
+      return;
+    }
+
+    xrSession = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures:['hit-test','local-floor']
     });
-    const vid = document.getElementById('cam');
-    vid.srcObject = stream;
-    vid.onloadedmetadata = () => {
-      document.getElementById('splash').style.display = 'none';
-      document.getElementById('ui').style.display     = 'flex';
-    };
-  } catch(e) {
-    alert('Camera permission required! Please allow camera access.');
+
+    renderer.xr.setReferenceSpaceType('local');
+    await renderer.xr.setSession(xrSession);
+
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('ui').style.display = 'flex';
+
+  } catch(e){
+
+    console.error(e);
+    alert('AR failed to start');
+
   }
 }
 
+window.startApp = startApp;
+
 // SWATCHES
 function buildSwatches() {
+
   const row = document.getElementById('sr');
+
   S.colors.forEach(c => {
+
     const d = document.createElement('div');
+
     d.className = 'dot'+(c===S.color?' sel':'');
+
     d.style.background = c;
-    d.onclick = () => { document.querySelectorAll('.dot').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); S.color=c; };
+
+    d.onclick = () => {
+
+      document.querySelectorAll('.dot').forEach(x=>x.classList.remove('sel'));
+
+      d.classList.add('sel');
+
+      S.color=c;
+
+    };
+
     row.appendChild(d);
+
   });
+
 }
+
 buildSwatches();
 
 function st(name,btn) {
+
   document.querySelectorAll('.tp').forEach(p=>p.classList.remove('active'));
+
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+
   document.getElementById('tab-'+name).classList.add('active');
+
   btn.classList.add('active');
+
 }
 
-function sp(w,d,h) { document.getElementById('sW').value=w; document.getElementById('sD').value=d; document.getElementById('sH').value=h; apSp(); }
-function apSp() { S.space.w=+document.getElementById('sW').value||120; S.space.d=+document.getElementById('sD').value||100; S.space.h=+document.getElementById('sH').value||80; updFit(); }
+window.st = st;
 
-function queueObj() {
+function sp(w,d,h){
+
+  document.getElementById('sW').value=w;
+  document.getElementById('sD').value=d;
+  document.getElementById('sH').value=h;
+
+  apSp();
+
+}
+
+window.sp = sp;
+
+function apSp(){
+
+  S.space.w=+document.getElementById('sW').value||120;
+  S.space.d=+document.getElementById('sD').value||100;
+  S.space.h=+document.getElementById('sH').value||80;
+
+  updFit();
+
+}
+
+window.apSp = apSp;
+
+function queueObj(){
+
   const name=document.getElementById('oN').value.trim()||'Box';
+
   const w=parseFloat(document.getElementById('oW').value);
   const d=parseFloat(document.getElementById('oD').value);
   const h=parseFloat(document.getElementById('oH').value);
-  if(!w||!d||!h){alert('Please enter W, D, and H!');return;}
+
+  if(!w||!d||!h){
+
+    alert('Please enter W, D, and H!');
+    return;
+
+  }
+
   S.queued={name,w,d,h,color:S.color};
+
   const btn=document.getElementById('placeBtn');
+
   btn.style.display='block';
+
   btn.textContent=`👆 Tap to place "${name}"`;
+
   document.getElementById('dragHint').style.display='none';
+
 }
 
-function placeObj() {
-  if(!S.queued) return;
-  const obj=S.queued; const id=S.nextId++;
-  const idx=S.objects.length%SLOTS.length;
-  const aw=obj.w*CM; const ad=obj.d*CM; const ah=obj.h*CM;
+window.queueObj = queueObj;
+
+function placeObj(){
+
+  if(!S.queued || !currentHitMatrix) return;
+
+  const obj=S.queued;
+  const id=S.nextId++;
+
+  const aw=obj.w*CM;
+  const ad=obj.d*CM;
+  const ah=obj.h*CM;
 
   const geo=new THREE.BoxGeometry(aw,ah,ad);
-  const mat=new THREE.MeshPhongMaterial({color:new THREE.Color(obj.color),transparent:true,opacity:0.72});
+
+  const mat=new THREE.MeshPhongMaterial({
+    color:new THREE.Color(obj.color),
+    transparent:true,
+    opacity:0.72
+  });
+
   const solid=new THREE.Mesh(geo,mat);
-  const wmat=new THREE.MeshBasicMaterial({color:new THREE.Color(obj.color),wireframe:true});
+
+  const wmat=new THREE.MeshBasicMaterial({
+    color:new THREE.Color(obj.color),
+    wireframe:true
+  });
+
   const wire=new THREE.Mesh(geo,wmat);
 
   const group=new THREE.Group();
+
   group.name='obj-'+id;
+
   group.userData={id,ah};
 
-  const slot=SLOTS[idx];
-  group.position.set(slot.x, ah/2, slot.z);
+  group.add(solid);
+  group.add(wire);
 
-  group.add(solid); group.add(wire);
-  gridGroup.add(group);
+  const tempMatrix = new THREE.Matrix4();
+  tempMatrix.fromArray(currentHitMatrix);
 
-  S.objects.push({id,...obj}); S.queued=null;
+  const pos = new THREE.Vector3();
+  pos.setFromMatrixPosition(tempMatrix);
+
+  group.position.copy(pos);
+  group.position.y += ah/2;
+
+  scene.add(group);
+
+  S.objects.push({id,...obj});
+
+  S.queued=null;
 
   document.getElementById('oN').value='';
   document.getElementById('oW').value='';
   document.getElementById('oD').value='';
   document.getElementById('oH').value='';
+
   document.getElementById('placeBtn').style.display='none';
+
   document.getElementById('dragHint').style.display='block';
 
-  renderList(); updFit();
+  renderList();
+  updFit();
+
 }
 
+window.placeObj = placeObj;
+
 // TOUCH DRAG
-const raycaster=new THREE.Raycaster();
-function ndc(t){ return new THREE.Vector2((t.clientX/window.innerWidth)*2-1,(t.clientY/window.innerHeight)*-2+1); }
+const raycaster = new THREE.Raycaster();
+
+function ndc(t){
+
+  return new THREE.Vector2(
+    (t.clientX/window.innerWidth)*2-1,
+    (t.clientY/window.innerHeight)*-2+1
+  );
+
+}
 
 canvas.style.pointerEvents='all';
 
 canvas.addEventListener('touchstart',e=>{
+
   if(e.touches.length!==1) return;
+
   const t=e.touches[0];
+
   raycaster.setFromCamera(ndc(t),cam);
+
   const meshes=[];
-  gridGroup.traverse(c=>{ if(c.isMesh&&c.parent&&c.parent.userData&&c.parent.userData.id) meshes.push(c); });
+
+  scene.traverse(c=>{
+
+    if(c.isMesh&&c.parent&&c.parent.userData&&c.parent.userData.id){
+
+      meshes.push(c);
+
+    }
+
+  });
+
   const hits=raycaster.intersectObjects(meshes,false);
+
   if(hits.length>0){
+
     const grp=hits[0].object.parent;
+
     if(grp&&grp.userData.id){
-      S.dragging=true; S.dragId=grp.userData.id; S.selId=grp.userData.id;
-      S.lastTX=t.clientX; S.lastTY=t.clientY;
-      renderList(); e.preventDefault();
+
+      S.dragging=true;
+      S.dragId=grp.userData.id;
+      S.selId=grp.userData.id;
+
+      S.lastTX=t.clientX;
+      S.lastTY=t.clientY;
+
+      renderList();
+
+      e.preventDefault();
+
     }
   }
+
 },{passive:false});
 
 canvas.addEventListener('touchmove',e=>{
+
   if(!S.dragging||!S.dragId) return;
+
   e.preventDefault();
+
   const t=e.touches[0];
-  const group=gridGroup.getObjectByName('obj-'+S.dragId);
+
+  const group=scene.getObjectByName('obj-'+S.dragId);
+
   if(!group) return;
-  const dx=(t.clientX-S.lastTX)*0.004;
-  const dz=(t.clientY-S.lastTY)*0.004;
+
+  const dx=(t.clientX-S.lastTX)*0.002;
+  const dz=(t.clientY-S.lastTY)*0.002;
+
   group.position.x+=dx;
   group.position.z+=dz;
-  group.position.y=group.userData.ah/2;
-  S.lastTX=t.clientX; S.lastTY=t.clientY;
+
+  S.lastTX=t.clientX;
+  S.lastTY=t.clientY;
+
 },{passive:false});
 
-canvas.addEventListener('touchend',()=>{S.dragging=false;S.dragId=null;});
+canvas.addEventListener('touchend',()=>{
 
-function selObj(id){S.selId=id;renderList();}
-function rmSel(){if(!S.selId){alert('Select an object first!');return;}rmById(S.selId);}
+  S.dragging=false;
+  S.dragId=null;
+
+});
+
+function selObj(id){
+
+  S.selId=id;
+  renderList();
+
+}
+
+window.selObj = selObj;
+
+function rmSel(){
+
+  if(!S.selId){
+
+    alert('Select an object first!');
+    return;
+
+  }
+
+  rmById(S.selId);
+
+}
+
+window.rmSel = rmSel;
+
 function rmById(id){
-  const g=gridGroup.getObjectByName('obj-'+id);if(g) gridGroup.remove(g);
+
+  const g=scene.getObjectByName('obj-'+id);
+
+  if(g) scene.remove(g);
+
   S.objects=S.objects.filter(o=>o.id!==id);
+
   if(S.selId===id) S.selId=null;
-  renderList();updFit();
+
+  renderList();
+  updFit();
+
 }
+
+window.rmById = rmById;
+
 function clrAll(){
+
   if(!S.objects.length) return;
+
   if(!confirm('Remove all objects?')) return;
-  S.objects.forEach(o=>{const g=gridGroup.getObjectByName('obj-'+o.id);if(g) gridGroup.remove(g);});
-  S.objects=[];S.selId=null;renderList();updFit();
+
+  S.objects.forEach(o=>{
+
+    const g=scene.getObjectByName('obj-'+o.id);
+
+    if(g) scene.remove(g);
+
+  });
+
+  S.objects=[];
+
+  S.selId=null;
+
+  renderList();
+  updFit();
+
 }
+
+window.clrAll = clrAll;
 
 function renderList(){
+
   const list=document.getElementById('ol');
-  document.getElementById('capBadge').textContent=S.objects.length+' object'+(S.objects.length!==1?'s':'');
-  if(!S.objects.length){list.innerHTML='<div class="em">No objects placed yet!</div>';return;}
+
+  document.getElementById('capBadge').textContent=
+    S.objects.length+' object'+(S.objects.length!==1?'s':'');
+
+  if(!S.objects.length){
+
+    list.innerHTML='<div class="em">No objects placed yet!</div>';
+    return;
+
+  }
+
   list.innerHTML='';
+
   S.objects.forEach(o=>{
+
     const c=document.createElement('div');
+
     c.className='oc'+(o.id===S.selId?' active':'');
-    c.innerHTML=`<div class="od" style="background:${o.color}"></div><div class="oi"><div class="on">${o.name}</div><div class="odim">${o.w}×${o.d}×${o.h} cm</div></div><button class="ox" onclick="rmById(${o.id});event.stopPropagation()">×</button>`;
+
+    c.innerHTML=`
+      <div class="od" style="background:${o.color}"></div>
+      <div class="oi">
+        <div class="on">${o.name}</div>
+        <div class="odim">${o.w}×${o.d}×${o.h} cm</div>
+      </div>
+      <button class="ox" onclick="rmById(${o.id});event.stopPropagation()">×</button>
+    `;
+
     c.onclick=()=>selObj(o.id);
+
     list.appendChild(c);
+
   });
+
 }
 
 function updFit(){
+
   const sv=S.space.w*S.space.d*S.space.h;
+
   const uv=S.objects.reduce((s,o)=>s+o.w*o.d*o.h,0);
+
   const pct=Math.min(100,Math.round((uv/sv)*100));
+
   const el=document.getElementById('fs');
-  if(!S.objects.length){el.className='ok';el.textContent='Add objects to start';return;}
-  if(pct<60){el.className='ok';el.textContent=`✓ ${pct}% full — fits!`;}
-  else if(pct<85){el.className='warn';el.textContent=`⚠ ${pct}% — getting tight`;}
-  else{el.className='bad';el.textContent=`✗ ${pct}% — won't fit!`;}
+
+  if(!S.objects.length){
+
+    el.className='ok';
+    el.textContent='Add objects to start';
+
+    return;
+
+  }
+
+  if(pct<60){
+
+    el.className='ok';
+    el.textContent=`✓ ${pct}% full — fits!`;
+
+  }
+
+  else if(pct<85){
+
+    el.className='warn';
+    el.textContent=`⚠ ${pct}% — getting tight`;
+
+  }
+
+  else{
+
+    el.className='bad';
+    el.textContent=`✗ ${pct}% — won't fit!`;
+
+  }
 }
 </script>
 </body>
