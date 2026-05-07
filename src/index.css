@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Brand Colors ── */
+  --color-saah-blue: #4A9EFF;
+  --color-saah-blue-light: rgba(74, 158, 255, 0.15);
+  --color-saah-blue-glow: rgba(74, 158, 255, 0.4);
+  --color-saah-orange: #FF8C42;
+  --color-saah-green: #4ade80;
+  --color-saah-red: #f87171;
+  --color-saah-yellow: #facc15;
+  --color-saah-pink: #f472b6;
+  --color-saah-purple: #a78bfa;
+  --color-saah-teal: #34d399;
+
+  /* ── Surfaces ── */
+  --color-saah-bg: rgba(8, 12, 24, 0.92);
+  --color-saah-bg-solid: #080C18;
+  --color-saah-border: rgba(74, 158, 255, 0.2);
+  --color-saah-text: #E8F0FF;
+  --color-saah-muted: #4A6080;
+  --color-saah-surface: rgba(74, 158, 255, 0.04);
+
+  /* ── Typography ── */
+  --font-display: 'Space Mono', monospace;
+  --font-body: 'DM Sans', sans-serif;
+  --font-arabic: 'Tajawal', 'DM Sans', sans-serif;
+}
+
+/* ── Base Reset ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  font-family: var(--font-arabic);
+  background: #000;
+  color: var(--color-saah-text);
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-saah-border);
+  border-radius: 2px;
+}
+
+/* ── Glow Animation ── */
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 20px var(--color-saah-blue-glow); }
+  50% { box-shadow: 0 0 50px rgba(74, 158, 255, 0.9); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+/* ── Glass Panel ── */
+.glass {
+  background: var(--color-saah-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-saah-border);
+}
+
+/* ── Input Focus ── */
+input:focus {
+  outline: none;
+  border-color: var(--color-saah-blue) !important;
+}
+
+/* ── Touch Optimizations ── */
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
